@@ -127,6 +127,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     QuorumAuthLearner authLearner;
 
     /**
+     * ZKDatabase是quorumpeer的顶级成员，它将在以后实例化的所有zookeeperserver中使用。
+     * 同样，它在启动时创建一次，并且仅在leader truncate消息的情况下才丢弃
+     */
+    /**
      * ZKDatabase is a top level member of quorumpeer
      * which will be used in all the zookeeperservers
      * instantiated later. Also, it is created once on
@@ -992,6 +996,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
     private int electionType;
 
+    // 当前选举算法
     Election electionAlg;
 
     ServerCnxnFactory cnxnFactory;
@@ -1080,6 +1085,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             LOG.warn("Problem starting AdminServer", e);
             System.out.println(e);
         }
+        // 启动Leader选举
         startLeaderElection();
         startJvmPauseMonitor();
         super.start();
@@ -1155,6 +1161,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             throw re;
         }
 
+        // 创建选举算法，默认3（也只能是3）
         this.electionAlg = createElectionAlgorithm(electionType);
     }
 
@@ -1285,6 +1292,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             if (listener != null) {
                 listener.start();
                 FastLeaderElection fle = new FastLeaderElection(this, qcm);
+                // 启动WorkerReceiver和WorkerSender线程
                 fle.start();
                 le = fle;
             } else {

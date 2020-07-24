@@ -316,16 +316,19 @@ public class NIOServerCnxn extends ServerCnxn {
     void doIO(SelectionKey k) throws InterruptedException {
         try {
             if (!isSocketOpen()) {
+                // 如果socket非open，打印warn日志并返回
                 LOG.warn("trying to do i/o on a null socket for session: 0x{}", Long.toHexString(sessionId));
 
                 return;
             }
-            if (k.isReadable()) {
+            if (k.isReadable()) {  // 如果选择键是可读的
+                // 将socket的内容读取到ByteBuffer中，并返回读取到的字节长度
                 int rc = sock.read(incomingBuffer);
                 if (rc < 0) {
+                    // 说明没读到，通常是客户端关闭了连接
                     handleFailedRead();
                 }
-                if (incomingBuffer.remaining() == 0) {
+                if (incomingBuffer.remaining() == 0) {  // 剩余为0，说明ByteBuffer被读满了（socket中可能还有数据哦）
                     boolean isPayload;
                     if (incomingBuffer == lenBuffer) { // start of next request
                         incomingBuffer.flip();
@@ -338,8 +341,7 @@ public class NIOServerCnxn extends ServerCnxn {
                     if (isPayload) { // not the case for 4letterword
                         readPayload();
                     } else {
-                        // four letter words take care
-                        // need not do anything else
+                        // four letter words take care need not do anything else  （四个字母的单词请注意，无需执行任何其他操作）
                         return;
                     }
                 }

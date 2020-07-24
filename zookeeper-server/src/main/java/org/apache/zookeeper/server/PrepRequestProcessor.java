@@ -754,6 +754,9 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
     }
 
     /**
+     * 该方法将在ProcessRequestThread内部调用，该方法是一个单例，因此将有一个线程调用此代码。
+     */
+    /**
      * This method will be called inside the ProcessRequestThread, which is a
      * singleton, so there will be a single thread calling this code.
      *

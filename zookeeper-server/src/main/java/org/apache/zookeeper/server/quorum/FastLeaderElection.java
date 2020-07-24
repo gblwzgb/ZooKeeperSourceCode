@@ -38,6 +38,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 使用TCP实现领导人选举。它使用QuorumCnxManager类的对象来管理连接。否则，与其他UDP实现一样，该算法基于推送。
+ *
+ * 有一些参数可以调整以更改其行为。首先，finalizeWait确定在确定leader之前要等待的时间。这是leader选举算法的一部分。
+ */
+
+/**
  * Implementation of leader election using TCP. It uses an object of the class
  * QuorumCnxManager to manage connections. Otherwise, the algorithm is push-based
  * as with the other UDP implementations.
@@ -89,6 +95,9 @@ public class FastLeaderElection implements Election {
         LOG.info("{}={}", MAX_NOTIFICATION_INTERVAL, maxNotificationInterval);
     }
 
+    /**
+     * 连接管理器。快速leader选举使用TCP进行对等体之间的通信，而QuorumCnxManager管理此类连接。
+     */
     /**
      * Connection manager. Fast leader election uses TCP for
      * communication between peers, and QuorumCnxManager manages
@@ -640,6 +649,7 @@ public class FastLeaderElection implements Election {
      * This method starts the sender and receiver threads.
      */
     public void start() {
+        // 启动WorkerReceiver和WorkerSender线程
         this.messenger.start();
     }
 

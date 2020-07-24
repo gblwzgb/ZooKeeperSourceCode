@@ -73,6 +73,16 @@ import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 此类为使用TCP的领导者选举实现了一个连接管理器。它为每对服务器维护一个连接。
+ * 棘手的部分是要确保每对运行正常且可以通过网络进行通信的服务器之间都只有一个连接。
+ *
+ * 如果两个服务器尝试同时启动连接，则连接管理器将使用一种非常简单的平局决胜机制，根据双方的IP地址来决定删除哪个连接。
+ *
+ * 对于每个对等方，管理器都会维护要发送的消息队列。如果与任何特定对等方的连接断开，则发送方线程会将消息放回列表中。
+ * 由于此实现当前使用队列实现来维护要发送给另一个对等方的消息，因此我们将消息添加到队列的尾部，从而更改消息的顺序。
+ * 尽管这对于领导人选举来说不是问题，但在巩固对等沟通时可能是一个问题。不过，这有待验证。
+ */
 
 /**
  * This class implements a connection manager for leader election using TCP. It

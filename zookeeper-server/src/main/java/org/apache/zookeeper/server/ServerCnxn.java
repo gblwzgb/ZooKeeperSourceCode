@@ -354,9 +354,12 @@ public abstract class ServerCnxn implements Stats, Watcher {
     }
 
     protected void packetReceived(long bytes) {
+        // cas新增收到的包裹计数
         incrPacketsReceived();
+        // 获取ServerStats（服务器统计）
         ServerStats serverStats = serverStats();
         if (serverStats != null) {
+            // cas新增收到的包裹计数
             serverStats().incrementPacketsReceived();
         }
         ServerMetrics.getMetrics().BYTES_RECEIVED_COUNT.add(bytes);

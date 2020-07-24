@@ -19,6 +19,16 @@
 package org.apache.zookeeper.server;
 
 /**
+ * RequestProcessor链接在一起以处理事务。请求始终按顺序处理。
+ * 独立服务器，跟随者和领导者都具有略微不同的RequestProcessor链接在一起。
+ *
+ * 请求始终在RequestProcessor链中向前移动。请求通过processRequest()传递给RequestProcessor。
+ * 通常，方法总是由单个线程调用。
+ *
+ * 调用shutdown时，请求RequestProcessor也应关闭与其连接的所有RequestProcessor。
+ */
+
+/**
  * RequestProcessors are chained together to process transactions. Requests are
  * always processed in order. The standalone server, follower, and leader all
  * have slightly different RequestProcessors chained together.

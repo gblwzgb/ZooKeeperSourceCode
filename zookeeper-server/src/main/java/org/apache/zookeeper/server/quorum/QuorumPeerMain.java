@@ -80,6 +80,11 @@ public class QuorumPeerMain {
     protected QuorumPeer quorumPeer;
 
     /**
+     * 要启动复制的服务器，请在命令行上指定配置文件名。
+     *
+     * @param args 配置文件的路径
+     */
+    /**
      * To start the replicated server specify the configuration file name on
      * the command line.
      * @param args path to the configfile
@@ -87,6 +92,7 @@ public class QuorumPeerMain {
     public static void main(String[] args) {
         QuorumPeerMain main = new QuorumPeerMain();
         try {
+            // 初始化并运行
             main.initializeAndRun(args);
         } catch (IllegalArgumentException e) {
             LOG.error("Invalid arguments, exiting abnormally", e);
@@ -121,10 +127,11 @@ public class QuorumPeerMain {
     protected void initializeAndRun(String[] args) throws ConfigException, IOException, AdminServerException {
         QuorumPeerConfig config = new QuorumPeerConfig();
         if (args.length == 1) {
+            // 从配置文件中读取配置，并设置到QuorumPeerConfig中
             config.parse(args[0]);
         }
 
-        // Start and schedule the the purge task
+        // Start and schedule the the purge task  （启动并调度清除任务）
         DatadirCleanupManager purgeMgr = new DatadirCleanupManager(
             config.getDataDir(),
             config.getDataLogDir(),
@@ -136,13 +143,14 @@ public class QuorumPeerMain {
             runFromConfig(config);
         } else {
             LOG.warn("Either no config or no quorum defined in config, running in standalone mode");
-            // there is only server in the quorum -- run as standalone
+            // there is only server in the quorum -- run as standalone  （quorum中只有一台服务器-独立运行）
             ZooKeeperServerMain.main(args);
         }
     }
 
     public void runFromConfig(QuorumPeerConfig config) throws IOException, AdminServerException {
         try {
+            // 注册日志bean？
             ManagedUtil.registerLog4jMBeans();
         } catch (JMException e) {
             LOG.warn("Unable to register log4j JMX control", e);
@@ -151,6 +159,7 @@ public class QuorumPeerMain {
         LOG.info("Starting quorum peer");
         MetricsProvider metricsProvider;
         try {
+            // 启动指标提供者？
             metricsProvider = MetricsProviderBootstrap.startMetricsProvider(
                 config.getMetricsProviderClassName(),
                 config.getMetricsProviderConfiguration());
@@ -158,6 +167,7 @@ public class QuorumPeerMain {
             throw new IOException("Cannot boot MetricsProvider " + config.getMetricsProviderClassName(), error);
         }
         try {
+            // 初始化（内部创建了一个ServerMetrics）
             ServerMetrics.metricsProviderInitialized(metricsProvider);
             ServerCnxnFactory cnxnFactory = null;
             ServerCnxnFactory secureCnxnFactory = null;
@@ -172,7 +182,9 @@ public class QuorumPeerMain {
                 secureCnxnFactory.configure(config.getSecureClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), true);
             }
 
+            // new一个QuorumPeer()
             quorumPeer = getQuorumPeer();
+            // 给QuorumPeer设置各种属性
             quorumPeer.setTxnFactory(new FileTxnSnapLog(config.getDataLogDir(), config.getDataDir()));
             quorumPeer.enableLocalSessions(config.areLocalSessionsEnabled());
             quorumPeer.enableLocalSessionsUpgrading(config.isLocalSessionsUpgradingEnabled());
@@ -224,8 +236,11 @@ public class QuorumPeerMain {
                 quorumPeer.setJvmPauseMonitor(new JvmPauseMonitor(config));
             }
 
+            // 启动QuorumPeer
             quorumPeer.start();
+            // 添加ZK开始停止审核日志
             ZKAuditProvider.addZKStartStopAuditLog();
+            // 挂起直到QuorumPeer挂掉为止
             quorumPeer.join();
         } catch (InterruptedException e) {
             // warn, but generally this is ok

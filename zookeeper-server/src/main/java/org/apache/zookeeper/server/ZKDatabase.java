@@ -61,6 +61,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此类维护Zookeeper服务器状态的内存数据库，其中包括会话，数据树和已提交的日志。
+ * 从磁盘读取日志和快照后，它将启动。
+ */
+
+/**
  * This class maintains the in memory database of zookeeper
  * server states that includes the sessions, datatree and the
  * committed logs. It is booted up  after reading the logs

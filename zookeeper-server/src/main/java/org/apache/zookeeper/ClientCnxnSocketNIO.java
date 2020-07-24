@@ -99,8 +99,9 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     updateLastHeard();
                 }
             }
-        }
+        }  // 注意，SelectionKey是|的关系，即可读也可写，是保存在不同位置的bit上的。
         if (sockKey.isWritable()) {
+            // 获取可发送的Packet
             Packet p = findSendablePacket(outgoingQueue, sendThread.tunnelAuthInProgress());
 
             if (p != null) {
@@ -114,6 +115,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     }
                     p.createBB();
                 }
+                // 写ByteBuffer到Socket中
                 sock.write(p.bb);
                 if (!p.bb.hasRemaining()) {
                     sentCount.getAndIncrement();
@@ -146,7 +148,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                 // http://docs.oracle.com/javase/6/docs/technotes/guides/net/articles/connection_release.html
                 disableWrite();
             } else {
-                // Just in case
+                // Just in case  （以防万一）
                 enableWrite();
             }
         }
@@ -374,8 +376,9 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
 
     synchronized void enableWrite() {
-        int i = sockKey.interestOps();
-        if ((i & SelectionKey.OP_WRITE) == 0) {
+        int i = sockKey.interestOps();  // 这是目前关心的操作
+        if ((i & SelectionKey.OP_WRITE) == 0) {  // 如果没有关心写操作
+            // 关心一下
             sockKey.interestOps(i | SelectionKey.OP_WRITE);
         }
     }

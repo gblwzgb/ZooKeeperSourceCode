@@ -34,6 +34,9 @@
      }
 
      /**
+      * 验证，不能为空字符串，要以/开头，不能以/结尾等等等等
+      */
+     /**
       * Validate the provided znode path string
       * @param path znode path string
       * @throws IllegalArgumentException if the path is invalid

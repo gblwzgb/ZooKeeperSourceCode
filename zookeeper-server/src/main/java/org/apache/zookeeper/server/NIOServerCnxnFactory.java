@@ -309,6 +309,19 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     }
 
     /**
+     * SelectorThread从AcceptThread接收新accepted的连接，并负责选择连接中的I/O准备情况。
+     * 该线程是唯一对选择器执行任何非线程安全或可能阻止的调用的线程（注册新连接和读取/写入兴趣操作）。
+     *
+     * 将连接分配给SelectorThread是永久的，只有一个SelectorThread会与该连接进行交互。
+     * 有1-N个SelectorThreads，在SelectorThreads之间平均分配连接。
+     *
+     * 如果存在工作线程池，则当连接具有I/O执行时，SelectorThread会通过清除其感兴趣的操作将其从选择中删除，并安排I/O进行工作线程的处理。
+     * 工作完成后，将连接置于就绪队列中，以恢复其兴趣操作并继续选择。
+     *
+     * 如果没有工作线程池，则SelectorThread将直接执行I/O。
+     */
+    // Accepter有个SelectorThread集合，每个SelectorThread维护一批连接
+    /**
      * The SelectorThread receives newly accepted connections from the
      * AcceptThread and is responsible for selecting for I/O readiness
      * across the connections. This thread is the only thread that performs
@@ -370,6 +383,10 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         }
 
         /**
+         * 线程的主循环在连接上执行selects()并分派就绪的I/O工作请求，
+         * 然后注册所有未决的新接受连接并更新队列上的所有兴趣操作。
+         */
+        /**
          * The main loop for the thread selects() on the connections and
          * dispatches ready I/O work requests, then registers all pending
          * newly accepted connections and updates any interest ops on the
@@ -379,8 +396,12 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             try {
                 while (!stopped) {
                     try {
+                        // select并处理准备就绪的事件。
+                        // 可能为了处理下面两个操作而被唤醒。见addInterestOpsUpdateRequest、addAcceptedConnection
                         select();
+                        // 处理Accepter新分配过来的连接（如果有的话）
                         processAcceptedConnections();
+                        // 某些连接想要更新InterestOps，处理这些请求
                         processInterestOpsUpdateRequests();
                     } catch (RuntimeException e) {
                         LOG.warn("Ignoring unexpected runtime exception", e);
@@ -428,7 +449,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                         cleanupSelectionKey(key);
                         continue;
                     }
-                    if (key.isReadable() || key.isWritable()) {
+                    if (key.isReadable() || key.isWritable()) {  // 可读或者可写
                         handleIO(key);
                     } else {
                         LOG.warn("Unexpected ops in select {}", key.readyOps());
@@ -448,14 +469,16 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             IOWorkRequest workRequest = new IOWorkRequest(this, key);
             NIOServerCnxn cnxn = (NIOServerCnxn) key.attachment();
 
-            // Stop selecting this key while processing on its
-            // connection
+            // Stop selecting this key while processing on its connection  (在处理它的连接时停止选择此键) （顺序执行？）
             cnxn.disableSelectable();
             key.interestOps(0);
             touchCnxn(cnxn);
             workerPool.schedule(workRequest);
         }
 
+        /**
+         * 遍历已分配给该线程但尚未放置在选择器上的接受连接的队列。
+         */
         /**
          * Iterate over the queue of accepted connections that have been
          * assigned to this thread but not yet placed on the selector.
@@ -465,6 +488,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             while (!stopped && (accepted = acceptedQueue.poll()) != null) {
                 SelectionKey key = null;
                 try {
+                    // 将SocketChannel注册到selector上，并设置感兴趣的事情为：读
                     key = accepted.register(selector, SelectionKey.OP_READ);
                     NIOServerCnxn cnxn = createConnection(accepted, key, this);
                     key.attach(cnxn);
@@ -478,6 +502,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         }
 
         /**
+         * 遍历准备恢复选择的连接队列，并恢复其兴趣操作选择掩码。
+         */
+        /**
          * Iterate over the queue of connections ready to resume selection,
          * and restore their interest ops selection mask.
          */
@@ -487,8 +514,10 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 if (!key.isValid()) {
                     cleanupSelectionKey(key);
                 }
+                // 获取SelectionKey上关联的对象
                 NIOServerCnxn cnxn = (NIOServerCnxn) key.attachment();
                 if (cnxn.isSelectable()) {
+                    // 更新兴趣事件
                     key.interestOps(cnxn.getInterestOps());
                 }
             }
@@ -533,7 +562,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 touchCnxn(cnxn);
             }
 
-            // Mark this connection as once again ready for selection
+            // Mark this connection as once again ready for selection  （将此连接标记为再次可供选择）
             cnxn.enableSelectable();
             // Push an update request on the queue to resume selecting
             // on the current set of interest ops, which may have changed
@@ -647,7 +676,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         expirerThread = new ConnectionExpirerThread();
 
         int numCores = Runtime.getRuntime().availableProcessors();
-        // 32 cores sweet spot seems to be 4 selector threads
+        // 32 cores sweet spot seems to be 4 selector threads  (32核心的最佳选择似乎是4个选择器线程)
         numSelectorThreads = Integer.getInteger(
             ZOOKEEPER_NIO_NUM_SELECTOR_THREADS,
             Math.max((int) Math.sqrt((float) numCores / 2), 1));

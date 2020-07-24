@@ -1632,6 +1632,7 @@ public class ClientCnxn {
         // Note that we do not generate the Xid for the packet yet. It is
         // generated later at send-time, by an implementation of ClientCnxnSocket::doIO(),
         // where the packet is actually sent.
+        // 创建一个Packet
         packet = new Packet(h, r, request, response, watchRegistration);
         packet.cb = cb;
         packet.ctx = ctx;
@@ -1644,16 +1645,20 @@ public class ClientCnxn {
         // later packet will be notified.
         synchronized (state) {
             if (!state.isAlive() || closing) {
+                // 丢失这个Packet
                 conLossPacket(packet);
             } else {
-                // If the client is asking to close the session then
-                // mark as closing
+                // If the client is asking to close the session then mark as closing
+                // 如果客户端请求关闭会话，则标记为closing
                 if (h.getType() == OpCode.closeSession) {
+                    // 标记
                     closing = true;
                 }
+                // 加入LinkedBlockingDeque
                 outgoingQueue.add(packet);
             }
         }
+        // 唤醒NIO的selector
         sendThread.getClientCnxnSocket().packetAdded();
         return packet;
     }

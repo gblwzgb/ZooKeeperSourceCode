@@ -88,6 +88,33 @@ import org.apache.zookeeper.server.EphemeralType;
 import org.apache.zookeeper.server.watch.PathParentIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+/**
+ * 这是ZooKeeper客户端库的主要类。要使用ZooKeeper服务，应用程序必须首先实例化ZooKeeper类的对象。
+ * 所有迭代将通过调用ZooKeeper类的方法来完成。除非另有说明，否则此类的方法是线程安全的。
+ *
+ * 建立与服务器的连接后，便会将会话（session）ID分配给客户端。客户端将定期向服务器发送心跳，以保持会话有效。
+ *
+ * 只要客户端的会话ID保持有效，应用程序就可以通过客户端调用ZooKeeper API。
+ *
+ * 如果客户端由于某种原因未能在较长时间内（例如，超过sessionTimeout值）向服务器发送心跳，
+ * 则服务器将使该会话到期，并且该会话ID将变得无效。客户对象将不再可用。要进行ZooKeeper API调用，应用程序必须创建一个新的客户端对象。
+ *
+ * 如果客户端当前连接到的ZooKeeper服务器失败或以其他方式没有响应，则客户端将在其会话ID过期之前自动尝试连接到另一台服务器。
+ * 如果成功，则应用程序可以继续使用客户端。
+ *
+ * ZooKeeper API方法是同步的或异步的。同步方法将阻塞，直到服务器响应为止。
+ * 异步方法只是将请求排队等待发送并立即返回。它们采用一个回调对象，该对象将在成功执行请求或发生错误时执行，并带有指示错误的适当返回码（rc）。（response code的缩写吗）
+ *
+ * 某些成功的ZooKeeper API调用可以将watcher留在ZooKeeper服务器中的"data nodes"（数据节点）上。
+ * 其他成功的ZooKeeper API调用也可以触发这些watch。
+ * 触发watch后，事件将传递给客户，该客户将watch放在第一位。
+ * 每只watch只能触发一次。因此，每离开一个watch，最多将有一个事件传递给客户。
+ *
+ * 客户端需要一个实现Watcher接口的类的对象，以处理传递给客户端的事件。
+ *
+ * 当客户端断开当前连接并重新连接到服务器时，所有现有watcher都被视为已触发，但未传递的事件将丢失。
+ * 为了模拟这一点，客户端将生成一个特殊事件，以告知事件处理程序连接已断开。此特殊事件的EventType为None，而KeeperState已断开连接。
+ */
 
 /**
  * This is the main class of ZooKeeper client library. To use a ZooKeeper
@@ -1947,6 +1974,26 @@ public class ZooKeeper implements AutoCloseable {
     }
 
     /**
+     * 删除给定路径的节点。 如果存在这样的节点，并且给定版本与该节点的版本相匹配，则调用将成功（如果给定版本为-1，则它与任何节点的版本相匹配）。(无差别攻击，dubbo就是这样...)
+     *
+     * 如果节点不存在，则会引发错误代码为KeeperException.NoNode的KeeperException。
+     *
+     * 如果给定版本与节点的版本不匹配，则将引发错误代码为KeeperException.BadVersion的KeeperException。
+     *
+     * 如果节点有子节点，则将引发错误代码为KeeperException.NotEmpty的KeeperException。
+     *
+     * 如果成功，此操作将触发现有API调用留下的给定路径的节点上的所有watches，以及getChildren API调用留下的父节点上的watches。(这里没翻译好，exists是个方法)
+     *
+     * @param path
+     *                the path of the node to be deleted.
+     * @param version
+     *                the expected node version.
+     * @throws InterruptedException IF the server transaction is interrupted
+     * @throws KeeperException If the server signals an error with a non-zero
+     *   return code.
+     * @throws IllegalArgumentException if an invalid path is specified
+     */
+    /**
      * Delete the node with the given path. The call will succeed if such a node
      * exists, and the given version matches the node's version (if the given
      * version is -1, it matches any node's versions).
@@ -1975,6 +2022,7 @@ public class ZooKeeper implements AutoCloseable {
      */
     public void delete(final String path, int version) throws InterruptedException, KeeperException {
         final String clientPath = path;
+        // 校验路径是否合规
         PathUtils.validatePath(clientPath);
 
         final String serverPath;
@@ -1990,10 +2038,15 @@ public class ZooKeeper implements AutoCloseable {
             serverPath = prependChroot(clientPath);
         }
 
+        // 创建请求头
         RequestHeader h = new RequestHeader();
+        // 类型是：删除
         h.setType(ZooDefs.OpCode.delete);
+        // 创建一个删除请求
         DeleteRequest request = new DeleteRequest();
+        // 设置要删除的路径
         request.setPath(serverPath);
+        // 设置版本号
         request.setVersion(version);
         ReplyHeader r = cnxn.submitRequest(h, request, null, null);
         if (r.getErr() != 0) {
@@ -3386,11 +3439,14 @@ public class ZooKeeper implements AutoCloseable {
     private ClientCnxnSocket getClientCnxnSocket() throws IOException {
         String clientCnxnSocketName = getClientConfig().getProperty(ZKClientConfig.ZOOKEEPER_CLIENT_CNXN_SOCKET);
         if (clientCnxnSocketName == null) {
+            // 默认NIO
             clientCnxnSocketName = ClientCnxnSocketNIO.class.getName();
         }
         try {
+            // 获取使用ZKClientConfig作为参数的构造方法
             Constructor<?> clientCxnConstructor = Class.forName(clientCnxnSocketName)
                                                        .getDeclaredConstructor(ZKClientConfig.class);
+            // 反射创建实例
             ClientCnxnSocket clientCxnSocket = (ClientCnxnSocket) clientCxnConstructor.newInstance(getClientConfig());
             return clientCxnSocket;
         } catch (Exception e) {

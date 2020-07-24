@@ -148,8 +148,8 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                 // Throttling is disabled when maxRequests = 0
                 if (maxRequests > 0) {
                     while (!killed) {
-                        if (dropStaleRequests && request.isStale()) {
-                            // Note: this will close the connection
+                        if (dropStaleRequests && request.isStale()) {  // dropStaleRequests默认为true
+                            // Note: this will close the connection  （注意这将关闭连接）
                             dropRequest(request);
                             ServerMetrics.getMetrics().STALE_REQUESTS_DROPPED.add(1);
                             request = null;
@@ -166,7 +166,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                     break;
                 }
 
-                // A dropped stale request will be null
+                // A dropped stale request will be null  （被丢弃的过期请求将为空）
                 if (request != null) {
                     if (request.isStale()) {
                         ServerMetrics.getMetrics().STALE_REQUESTS.add(1);

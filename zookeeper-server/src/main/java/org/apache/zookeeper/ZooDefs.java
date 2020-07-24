@@ -25,6 +25,7 @@ import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Id;
 
+// 各种定义
 @InterfaceAudience.Public
 public class ZooDefs {
 
@@ -32,6 +33,7 @@ public class ZooDefs {
 
     public static final String ZOOKEEPER_NODE_SUBTREE = "/zookeeper/";
 
+    // 操作码
     @InterfaceAudience.Public
     public interface OpCode {
 
