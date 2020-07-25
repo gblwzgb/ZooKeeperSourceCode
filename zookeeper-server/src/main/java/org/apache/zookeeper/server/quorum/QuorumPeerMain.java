@@ -172,8 +172,10 @@ public class QuorumPeerMain {
             ServerCnxnFactory cnxnFactory = null;
             ServerCnxnFactory secureCnxnFactory = null;
 
-            if (config.getClientPortAddress() != null) {
+            if (config.getClientPortAddress() != null) {  // 这里会有一个0.0.0.0:2181
+                // 反射创建一个ServerCnxnFactory，默认NIO模式
                 cnxnFactory = ServerCnxnFactory.createFactory();
+                // 配置ServerCnxnFactory
                 cnxnFactory.configure(config.getClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), false);
             }
 
@@ -185,14 +187,19 @@ public class QuorumPeerMain {
             // new一个QuorumPeer()
             quorumPeer = getQuorumPeer();
             // 给QuorumPeer设置各种属性
+            // 事务工厂
             quorumPeer.setTxnFactory(new FileTxnSnapLog(config.getDataLogDir(), config.getDataDir()));
             quorumPeer.enableLocalSessions(config.areLocalSessionsEnabled());
             quorumPeer.enableLocalSessionsUpgrading(config.isLocalSessionsUpgradingEnabled());
             //quorumPeer.setQuorumPeers(config.getAllMembers());
+            // 设置选举算法，默认3
             quorumPeer.setElectionType(config.getElectionAlg());
             quorumPeer.setMyid(config.getServerId());
+            // 默认3000
             quorumPeer.setTickTime(config.getTickTime());
+            // 默认-1，表示没指定
             quorumPeer.setMinSessionTimeout(config.getMinSessionTimeout());
+            // 默认-1，表示没指定
             quorumPeer.setMaxSessionTimeout(config.getMaxSessionTimeout());
             quorumPeer.setInitLimit(config.getInitLimit());
             quorumPeer.setSyncLimit(config.getSyncLimit());
@@ -200,23 +207,31 @@ public class QuorumPeerMain {
             quorumPeer.setObserverMasterPort(config.getObserverMasterPort());
             quorumPeer.setConfigFileName(config.getConfigFilename());
             quorumPeer.setClientPortListenBacklog(config.getClientPortListenBacklog());
+            // 设置"DB"，在内存中
             quorumPeer.setZKDatabase(new ZKDatabase(quorumPeer.getTxnFactory()));
             quorumPeer.setQuorumVerifier(config.getQuorumVerifier(), false);
             if (config.getLastSeenQuorumVerifier() != null) {
                 quorumPeer.setLastSeenQuorumVerifier(config.getLastSeenQuorumVerifier(), false);
             }
             quorumPeer.initConfigInZKDatabase();
+            // 连接工厂
             quorumPeer.setCnxnFactory(cnxnFactory);
+            // 安全连接工厂
             quorumPeer.setSecureCnxnFactory(secureCnxnFactory);
             quorumPeer.setSslQuorum(config.isSslQuorum());
             quorumPeer.setUsePortUnification(config.shouldUsePortUnification());
+            // Learner的类型，默认PARTICIPANT（参与者），可以设置成OBSERVER（不参与选举）
             quorumPeer.setLearnerType(config.getPeerType());
+            // 默认true
             quorumPeer.setSyncEnabled(config.getSyncEnabled());
+            // 默认false
             quorumPeer.setQuorumListenOnAllIPs(config.getQuorumListenOnAllIPs());
             if (config.sslQuorumReloadCertFiles) {
                 quorumPeer.getX509Util().enableCertFileReloading();
             }
+            // 默认false
             quorumPeer.setMultiAddressEnabled(config.isMultiAddressEnabled());
+            // 默认true
             quorumPeer.setMultiAddressReachabilityCheckEnabled(config.isMultiAddressReachabilityCheckEnabled());
             quorumPeer.setMultiAddressReachabilityCheckTimeoutMs(config.getMultiAddressReachabilityCheckTimeoutMs());
 
@@ -230,6 +245,7 @@ public class QuorumPeerMain {
                 quorumPeer.setQuorumLearnerLoginContext(config.quorumLearnerLoginContext);
             }
             quorumPeer.setQuorumCnxnThreadsSize(config.quorumCnxnThreadsSize);
+            // 初始化quorumPeer
             quorumPeer.initialize();
 
             if (config.jvmPauseMonitorToRun) {

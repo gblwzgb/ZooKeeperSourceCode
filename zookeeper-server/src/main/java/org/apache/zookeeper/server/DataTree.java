@@ -84,6 +84,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此类维护树数据结构。它没有任何网络或客户端连接代码，因此可以以独立方式进行测试。
+ *
+ * 该树维护两个并行的数据结构：从完整路径映射到DataNode的哈希表和DataNode的树。
+ * 对路径的所有访问都是通过哈希表进行的。仅在序列化到磁盘时遍历该树。
+ */
+
+/**
  * This class maintains the tree data structure. It doesn't have any networking
  * or client connection code in it so that it can be tested in a stand alone
  * way.
@@ -108,6 +115,7 @@ public class DataTree {
 
     private IWatchManager childWatches;
 
+    /** 缓存所有DataNode的路径和数据的总大小 */
     /** cached total size of paths and data for all DataNodes */
     private final AtomicLong nodeDataSize = new AtomicLong(0);
 
@@ -465,10 +473,15 @@ public class DataTree {
      * @throws NoNodeException
      */
     public void createNode(final String path, byte[] data, List<ACL> acl, long ephemeralOwner, int parentCVersion, long zxid, long time, Stat outputStat) throws KeeperException.NoNodeException, KeeperException.NodeExistsException {
+        // 取最后一个/
         int lastSlash = path.lastIndexOf('/');
+        // /前的是父节点路径
         String parentName = path.substring(0, lastSlash);
+        // /后的是子节点路径
         String childName = path.substring(lastSlash + 1);
+        // 创建一个个节点统计的类
         StatPersisted stat = createStat(zxid, time, ephemeralOwner);
+        // 父节点不存在，报错
         DataNode parent = nodes.get(parentName);
         if (parent == null) {
             throw new KeeperException.NoNodeException();
@@ -489,9 +502,11 @@ public class DataTree {
 
             Set<String> children = parent.getChildren();
             if (children.contains(childName)) {
+                // 子节点已存在异常
                 throw new KeeperException.NodeExistsException();
             }
 
+            // 前置处理：删除摘要
             nodes.preChange(parentName, parent);
             if (parentCVersion == -1) {
                 parentCVersion = parent.stat.getCversion();
@@ -506,10 +521,15 @@ public class DataTree {
                 parent.stat.setCversion(parentCVersion);
                 parent.stat.setPzxid(zxid);
             }
+            // 创建一个子节点
             DataNode child = new DataNode(data, longval, stat);
+            // 将子节点添加到父节点中
             parent.addChild(childName);
+            // 后置处理：添加摘要
             nodes.postChange(parentName, parent);
+            // 增加统计data长度的缓存
             nodeDataSize.addAndGet(getNodeSize(path, child.data));
+            // 添加到CHM中
             nodes.put(path, child);
             EphemeralType ephemeralType = EphemeralType.get(ephemeralOwner);
             if (ephemeralType == EphemeralType.CONTAINER) {
@@ -530,7 +550,7 @@ public class DataTree {
                 child.copyStat(outputStat);
             }
         }
-        // now check if its one of the zookeeper node child
+        // now check if its one of the zookeeper node child  （现在检查它是否是zookeeper节点子节点之一）
         if (parentName.startsWith(quotaZookeeper)) {
             // now check if its the limit node
             if (Quotas.limitNode.equals(childName)) {
@@ -542,14 +562,16 @@ public class DataTree {
                 updateQuotaForPath(parentName.substring(quotaZookeeper.length()));
             }
         }
-        // also check to update the quotas for this node
+        // also check to update the quotas for this node  （还要检查以更新此节点的quotas（配额？））
         String lastPrefix = getMaxPrefixWithQuota(path);
         long bytes = data == null ? 0 : data.length;
         if (lastPrefix != null) {
             // ok we have some match and need to update
             updateCountBytes(lastPrefix, bytes, 1);
         }
+        // 更新写统计
         updateWriteStat(path, bytes);
+        // todo：通知watches
         dataWatches.triggerWatch(path, Event.EventType.NodeCreated);
         childWatches.triggerWatch(parentName.equals("") ? "/" : parentName, Event.EventType.NodeChildrenChanged);
     }
@@ -563,43 +585,59 @@ public class DataTree {
      *            the current zxid
      * @throws KeeperException.NoNodeException
      */
+    // 从datatree中删除路径
     public void deleteNode(String path, long zxid) throws KeeperException.NoNodeException {
+        // 取最后一个/
         int lastSlash = path.lastIndexOf('/');
+        // /之前的是父路径（或叫父节点）
         String parentName = path.substring(0, lastSlash);
+        // /之后的是子路径（或叫子节点）
         String childName = path.substring(lastSlash + 1);
 
         // The child might already be deleted during taking fuzzy snapshot,
         // but we still need to update the pzxid here before throw exception
-        // for no such child
+        // for no such child  (在拍摄模糊快照时可能已经删除了该子项，但是对于没有此类子项的异常，我们仍然需要在此处更新pzxid。)
+
+        // 从ConcurrentHashMap中取出要删除节点的父节点
         DataNode parent = nodes.get(parentName);
         if (parent == null) {
+            // 找不到节点，抛节点不存在异常
             throw new KeeperException.NoNodeException();
         }
-        synchronized (parent) {
+        synchronized (parent) {  // 锁住
+            // 前置处理：内部是删除摘要 todo：不懂
             nodes.preChange(parentName, parent);
+            // 将子节点从set中移除
             parent.removeChild(childName);
             // Only update pzxid when the zxid is larger than the current pzxid,
             // otherwise we might override some higher pzxid set by a create
             // Txn, which could cause the cversion and pzxid inconsistent
+            // （译：仅当zxid大于当前pzxid时更新pzxid，否则我们可能会覆盖由create Txn设置的更高的pzxid，这可能导致转换和pzxid不一致）
             if (zxid > parent.stat.getPzxid()) {
+                // 更新pzxid为当前zxid
                 parent.stat.setPzxid(zxid);
             }
+            // 后置处理：内部是添加摘要
             nodes.postChange(parentName, parent);
         }
 
+        // 获取要删除的子节点
         DataNode node = nodes.get(path);
         if (node == null) {
             throw new KeeperException.NoNodeException();
         }
+        // 从CHM中移除
         nodes.remove(path);
-        synchronized (node) {
+        synchronized (node) {  // 锁住子节点
             aclCache.removeUsage(node.acl);
+            // 减少统计的大小
             nodeDataSize.addAndGet(-getNodeSize(path, node.data));
         }
 
         // Synchronized to sync the containers and ttls change, probably
         // only need to sync on containers and ttls, will update it in a
         // separate patch.
+        // (译：同步到容器和ttls进行同步更改，可能只需要在容器和ttls上同步，将在单独的补丁中对其进行更新。)
         synchronized (parent) {
             long eowner = node.stat.getEphemeralOwner();
             EphemeralType ephemeralType = EphemeralType.get(eowner);
@@ -618,12 +656,12 @@ public class DataTree {
         }
 
         if (parentName.startsWith(procZookeeper) && Quotas.limitNode.equals(childName)) {
-            // delete the node in the trie.
-            // we need to update the trie as well
+            // delete the node in the trie. we need to update the trie as well  (删除trie中的节点。我们也需要更新trie)
+            // todo：
             pTrie.deletePath(parentName.substring(quotaZookeeper.length()));
         }
 
-        // also check to update the quotas for this node
+        // also check to update the quotas for this node  （还要检查以更新此节点的quotas（配额？））
         String lastPrefix = getMaxPrefixWithQuota(path);
         if (lastPrefix != null) {
             // ok we have some match and need to update
@@ -634,6 +672,7 @@ public class DataTree {
             updateCountBytes(lastPrefix, bytes, -1);
         }
 
+        // 更新写统计
         updateWriteStat(path, 0L);
 
         if (LOG.isTraceEnabled()) {
@@ -647,6 +686,7 @@ public class DataTree {
                 "childWatches.triggerWatch " + parentName);
         }
 
+        // todo：通知所有watcher
         WatcherOrBitSet processed = dataWatches.triggerWatch(path, EventType.NodeDeleted);
         childWatches.triggerWatch(path, EventType.NodeDeleted, processed);
         childWatches.triggerWatch("".equals(parentName) ? "/" : parentName, EventType.NodeChildrenChanged);
@@ -865,6 +905,7 @@ public class DataTree {
 
     public ProcessTxnResult processTxn(TxnHeader header, Record txn, TxnDigest digest) {
         ProcessTxnResult result = processTxn(header, txn);
+        // 比较摘要
         compareDigest(header, txn, digest);
         return result;
     }
@@ -1795,6 +1836,16 @@ public class DataTree {
         }
     }
 
+    /**
+     * 将树的摘要与事务摘要中存在的摘要进行比较。
+     * 如果有任何错误，请记录日志并警告watchers。
+     *
+     * @param header 被应用的事务头
+     * @param txn    事务
+     * @param digest 事务摘要
+     *
+     * @return 如果txn中的摘要与数据树中现在的内容不匹配，则返回false
+     */
     /**
      * Compares the digest of the tree with the digest present in transaction digest.
      * If there is any error, logs and alerts the watchers.

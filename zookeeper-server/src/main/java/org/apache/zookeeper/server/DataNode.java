@@ -30,6 +30,12 @@ import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.data.StatPersisted;
 
 /**
+ * 此类包含data tree中节点的数据。
+ *
+ * 一个数据节点包含：对父节点的引用，一个作为其数据的字节数组，一个acl，一个统计对象，一个子节点的路径set集
+ */
+
+/**
  * This class contains the data for a node in the data tree.
  * <p>
  * A data node contains a reference to its parent, a byte array as its data, an
@@ -39,11 +45,10 @@ import org.apache.zookeeper.data.StatPersisted;
 @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
 public class DataNode implements Record {
 
-    // the digest value of this node, calculated from path, data and stat
+    // the digest value of this node, calculated from path, data and stat  (根据路径，数据和统计信息计算得出的该节点的摘要值)
     private volatile long digest;
 
-    // indicate if the digest of this node is up to date or not, used to
-    // optimize the performance.
+    // indicate if the digest of this node is up to date or not, used to optimize the performance.  (指示此节点的摘要是否最新，用于优化性能。)
     volatile boolean digestCached;
 
     /** the data for this datanode */
@@ -55,10 +60,17 @@ public class DataNode implements Record {
     Long acl;
 
     /**
+     * 持久化到磁盘的该节点的统计信息。
+     */
+    /**
      * the stat for this node that is persisted to disk.
      */
     public StatPersisted stat;
 
+    /**
+     * 此节点的子级列表。请注意，子字符串列表不包含父路径，仅包含路径的最后一部分。
+     * 除反序列化（用于加速问题）外，这应该同步。
+     */
     /**
      * the list of children for this node. note that the list of children string
      * does not contain the parent path -- just the last part of the path. This

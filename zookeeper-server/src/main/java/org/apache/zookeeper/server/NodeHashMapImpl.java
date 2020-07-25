@@ -95,9 +95,8 @@ public class NodeHashMapImpl implements NodeHashMap {
 
     @Override
     public void postChange(String path, DataNode node) {
-        // we just made a change, so make sure the digest is
-        // invalidated
-        node.digestCached = false;
+        // we just made a change, so make sure the digest is invalidated  （我们刚刚进行了更改，因此请确保摘要无效）
+        node.digestCached = false;  // 缓存失效？
         addDigest(path, node);
     }
 
@@ -112,11 +111,12 @@ public class NodeHashMapImpl implements NodeHashMap {
     }
 
     private void removeDigest(String path, DataNode node) {
-        // Excluding everything under '/zookeeper/' for digest calculation.
+        // Excluding everything under '/zookeeper/' for digest calculation.  （排除“/zookeeper/”下的所有内容以进行摘要计算。）
         if (path.startsWith(ZooDefs.ZOOKEEPER_NODE_SUBTREE)) {
+            // 如果路径已"/zookeeper/"开头，则什么也不做
             return;
         }
-        if (digestEnabled) {
+        if (digestEnabled) {  // 默认true
             hash.removeDigest(digestCalculator.calculateDigest(path, node));
         }
     }

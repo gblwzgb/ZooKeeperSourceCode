@@ -25,6 +25,28 @@ import java.util.Map;
 import org.apache.zookeeper.CreateMode;
 
 /**
+ * 解释ZNode的ephemeralOwner字段的抽象。最初，ephemeralOwner注意到ZNode是临时的，并且哪个会话创建了该节点。
+ * 通过可选的系统属性（zookeeper.extendedTypesEnabled），可以启用“扩展”功能，例如TTL节点。
+ * ephemeralOwner的特殊bit用于表示启用了哪个功能，而ephemeralOwner的其余bit特定于功能。
+ *
+ * 当系统属性zookeeper.extendedTypesEnabled为true时，将启用扩展类型。
+ * 扩展的ephemeralOwner定义为设置了高8位（0xff00000000000000L）的ephemeralOwner。
+ * 高8位后面的两个字节用于表示ephemeralOwner代表哪个扩展功能。该功能将剩余的5个字节用于任何目的
+ *
+ * 当前，唯一的扩展功能是TTL节点。它由扩展特征值0表示。
+ * 即，对于TTL节点，ephemeralOwner将高字节设置为0xff，接下来的2个字节为0，后跟5个字节（以毫秒为单位）。
+ * 因此，TTL值为1毫秒的ephemeralOwner为：0xff00000000000001。
+ *
+ * 要添加新的扩展功能，请执行以下操作：
+ *      a）向枚举添加新名称，
+ *      b）定义一个常量EXTENDED_BIT_xxxx，该常量紧接在后（在TTL之后，将为0x0001），
+ *      c）通过静态初始化程序将映射添加到extendedFeatureMap
+ *
+ * 注意：“容器”节点从技术上讲是扩展类型，但是由于在此功能之前已实现，因此专门对其进行了表示。
+ * 根据定义，仅具有高位（0x8000000000000000L）的临时所有者是容器节点（与是否启用扩展类型无关）。
+ */
+
+/**
  * <p>
  * Abstraction that interprets the <code>ephemeralOwner</code> field of a ZNode. Originally,
  * the ephemeralOwner noted that a ZNode is ephemeral and which session created the node.

@@ -476,6 +476,13 @@ public class ZKDatabase {
     }
 
     /**
+     * 对数据进行事务处理并执行摘要比较。
+     * @param hdr 事务的事务头
+     * @param txn 需要处理的事务
+     * @param digest 预期的摘要。空值将跳过检查
+     * @return 在此datatree/zkdatabase上处理事务的结果
+     */
+    /**
      * the process txn on the data and perform digest comparision.
      * @param hdr the txnheader for the txn
      * @param txn the transaction that needs to be processed

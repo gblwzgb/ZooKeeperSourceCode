@@ -33,6 +33,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此RequestProcessor将请求记录到磁盘。它分批处理请求以有效地执行io。
+ * 在将请求的日志同步到磁盘之前，该请求不会传递到下一个RequestProcessor。
+ *
+ * SyncRequestProcessor在3种不同情况下使用
+ * 1. Leader - 将请求同步到磁盘，并将其转发到AckRequestProcessor，后者将ack发回给自己。
+ * 2. Follower - 将请求同步到磁盘，并将请求转发到SendAckRequestProcessor，后者将数据包发送到leader。
+ *               SendAckRequestProcessor是可刷新（flushable）的，这使我们可以强制将数据包推向leader。
+ * 3. Observer - 将提交的请求同步到磁盘（作为INFORM数据包接收）。它永远不会将ack发送回给leader，因此nextProcessor将为null。
+ *               因为它只包含提交的txns，所以这改变了观察者上txnlog的语义。
+ */
+
+/**
  * This RequestProcessor logs requests to disk. It batches the requests to do
  * the io efficiently. The request is not passed to the next RequestProcessor
  * until its log has been synced to disk.

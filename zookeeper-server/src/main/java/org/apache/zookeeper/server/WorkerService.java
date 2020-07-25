@@ -57,6 +57,12 @@ public class WorkerService {
     private volatile boolean stopped = true;
 
     /**
+     * @param name                  工作线程的名称为<name> Thread-##
+     * @param numThreads            工作线程数（0-N）如果为0，则调度的work将立即由调用线程运行
+     * @param useAssignableThreads  工作线程是否应单独分配
+     *                              如果numThreads是4，单独分配的话，就会创建4个线程数为1的线程池。不单独分配的话，则会创建1个线程数为4的线程池。
+     */
+    /**
      * @param name                  worker threads are named &lt;name&gt;Thread-##
      * @param numThreads            number of worker threads (0 - N)
      *                              If 0, scheduled work is run immediately by
@@ -198,6 +204,7 @@ public class WorkerService {
 
     public void start() {
         if (numWorkerThreads > 0) {
+            // 如果numThreads是4，单独分配的话，就会创建4个线程数为1的线程池。不单独分配的话，则会创建1个线程数为4的线程池。
             if (threadsAreAssignable) {
                 for (int i = 1; i <= numWorkerThreads; ++i) {
                     workers.add(Executors.newFixedThreadPool(1, new DaemonThreadFactory(threadNamePrefix, i)));

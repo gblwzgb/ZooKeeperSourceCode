@@ -286,8 +286,10 @@ public class QuorumPeerConfig {
             String key = entry.getKey().toString().trim();
             String value = entry.getValue().toString().trim();
             if (key.equals("dataDir")) {
+                // 创建文件
                 dataDir = vff.create(value);
             } else if (key.equals("dataLogDir")) {
+                // 创建文件
                 dataLogDir = vff.create(value);
             } else if (key.equals("clientPort")) {
                 clientPort = Integer.parseInt(value);
@@ -503,6 +505,7 @@ public class QuorumPeerConfig {
         // backward compatibility - dynamic configuration in the same file as
         // static configuration params see writeDynamicConfig()
         if (dynamicConfigFileStr == null) {
+            /** 重要：进一步解析配置,并记录在QuorumPeerConfig中 */
             setupQuorumPeerConfig(zkProp, true);
             if (isDistributed() && isReconfigEnabled()) {
                 // we don't backup static config for standalone mode.
@@ -675,9 +678,12 @@ public class QuorumPeerConfig {
 
     void setupQuorumPeerConfig(Properties prop, boolean configBackwardCompatibilityMode) throws IOException, ConfigException {
         quorumVerifier = parseDynamicConfig(prop, electionAlg, true, configBackwardCompatibilityMode);
+        // 从myid文件中读取当前机器的serverId
         setupMyId();
         setupClientPort();
+        // 设置当前的PeerType，是OBSERVER还是PARTICIPANT
         setupPeerType();
+        // 执行最后的校验
         checkValidity();
     }
 
@@ -700,12 +706,16 @@ public class QuorumPeerConfig {
             }
         }
 
+        // 默认QuorumMaj,创建后，配置文件里设置的服务器地址就解析完毕了
         QuorumVerifier qv = createQuorumVerifier(dynamicConfigProp, isHierarchical);
 
+        // 参与选举的成员数
         int numParticipators = qv.getVotingMembers().size();
+        // 不参与选举的成员数
         int numObservers = qv.getObservingMembers().size();
         if (numParticipators == 0) {
             if (!standaloneEnabled) {
+                // 非单机部署，报错
                 throw new IllegalArgumentException("standaloneEnabled = false then "
                                                    + "number of participants should be >0");
             }
@@ -724,12 +734,15 @@ public class QuorumPeerConfig {
         } else {
             if (warnings) {
                 if (numParticipators <= 2) {
+                    // 译：不会容忍任何服务器故障。您至少需要3台服务器。
                     LOG.warn("No server failure will be tolerated. You need at least 3 servers.");
                 } else if (numParticipators % 2 == 0) {
+                    // 译：非最佳配置，考虑将服务器数量设置为奇数。
                     LOG.warn("Non-optimial configuration, consider an odd number of servers.");
                 }
             }
 
+            // 遍历检查参与选举成员的选举地址是否存在，不存在抛异常
             for (QuorumServer s : qv.getVotingMembers().values()) {
                 if (s.electionAddr == null) {
                     throw new IllegalArgumentException("Missing election port for server: " + s.id);
@@ -740,8 +753,10 @@ public class QuorumPeerConfig {
     }
 
     private void setupMyId() throws IOException {
+        // 通过myid文件中的第一行指定当前机器的serverId
+        // 参考部署教程：https://www.jianshu.com/p/e9becafcbaa7，第3.3节
         File myIdFile = new File(dataDir, "myid");
-        // standalone server doesn't need myid file.
+        // standalone server doesn't need myid file.  （译：独立服务器不需要myid文件。）
         if (!myIdFile.isFile()) {
             return;
         }
@@ -769,6 +784,7 @@ public class QuorumPeerConfig {
             if ((!clientPortAddress.getAddress().isAnyLocalAddress() && !clientPortAddress.equals(qs.clientAddr)) || (
                 clientPortAddress.getAddress().isAnyLocalAddress()
                 && clientPortAddress.getPort() != qs.clientAddr.getPort())) {
+                // 静态配置文件和动态文件中配置的config地址不一致
                 throw new ConfigException("client address for this server (id = " + serverId
                                           + ") in static config file is " + clientPortAddress
                                           + " is different from client address found in dynamic file: " + qs.clientAddr);
@@ -785,10 +801,12 @@ public class QuorumPeerConfig {
 
     private void setupPeerType() {
         // Warn about inconsistent peer type
+        // 如果当前server在Observing集合里，就是OBSERVER，否则就是PARTICIPANT
         LearnerType roleByServersList = quorumVerifier.getObservingMembers().containsKey(serverId)
             ? LearnerType.OBSERVER
             : LearnerType.PARTICIPANT;
         if (roleByServersList != peerType) {
+            // 配置文件指定了peerType=xxx，server.1=xxxxx:xxx:xxx:OBSERVER，也配置了type，两者不一致，打印warn日志，并以server.xx中的属性值为准。
             LOG.warn(
                 "Peer type from servers list ({}) doesn't match peerType ({}). Defaulting to servers list.",
                 roleByServersList,
@@ -799,14 +817,17 @@ public class QuorumPeerConfig {
     }
 
     public void checkValidity() throws IOException, ConfigException {
-        if (isDistributed()) {
+        if (isDistributed()) {  // 是集群部署的
             if (initLimit == 0) {
+                // follower与leader的初始连接心跳数
                 throw new IllegalArgumentException("initLimit is not set");
             }
             if (syncLimit == 0) {
+                // follower与leader请求和应答的最大心跳数
                 throw new IllegalArgumentException("syncLimit is not set");
             }
             if (serverId == UNSET_SERVERID) {
+                // 当前server的serverId不能没有
                 throw new IllegalArgumentException("myid file is missing");
             }
         }

@@ -24,12 +24,24 @@ import java.util.Map;
 import org.apache.zookeeper.server.DataTree;
 
 /**
+ * 持久层的快照接口。实现此接口以实现快照。
+ */
+
+/**
  * snapshot interface for the persistence layer.
  * implement this interface for implementing
  * snapshots.
  */
 public interface SnapShot {
 
+    /**
+     * 从最后一个有效快照反序列化到datatree，并返回最后反序列化的zxid
+     *
+     * @param dt 要反序列化到的datatree
+     * @param sessions 要反序列化的会话
+     * @return 从快照反序列化的最后一个zxid
+     * @throws IOException
+     */
     /**
      * deserialize a data tree from the last valid snapshot and
      * return the last zxid that was deserialized
@@ -41,6 +53,15 @@ public interface SnapShot {
     long deserialize(DataTree dt, Map<Long, Integer> sessions) throws IOException;
 
     /**
+     * 将datatree和会话持久化到持久化存储中
+     *
+     * @param dt 要序列化的datatree
+     * @param sessions 要序列化的会话超时
+     * @param name 将快照存储到的对象名称（文件名称？）
+     * @param fsync 写入后立即同步快照
+     * @throws IOException
+     */
+    /**
      * persist the datatree and the sessions into a persistence storage
      * @param dt the datatree to be serialized
      * @param sessions the session timeouts to be serialized
@@ -51,6 +72,11 @@ public interface SnapShot {
     void serialize(DataTree dt, Map<Long, Integer> sessions, File name, boolean fsync) throws IOException;
 
     /**
+     * 查找最新的快照文件
+     * @return 最新的快照文件
+     * @throws IOException
+     */
+    /**
      * find the most recent snapshot file
      * @return the most recent snapshot file
      * @throws IOException
@@ -58,11 +84,19 @@ public interface SnapShot {
     File findMostRecentSnapshot() throws IOException;
 
     /**
+     * 获取上次保存/还原的快照的信息
+     * @return 最后快照的信息
+     */
+    /**
      * get information of the last saved/restored snapshot
      * @return info of last snapshot
      */
     SnapshotInfo getLastSnapshotInfo();
 
+    /**
+     * 立即从该快照释放资源
+     * @throws IOException
+     */
     /**
      * free resources from this snapshot immediately
      * @throws IOException

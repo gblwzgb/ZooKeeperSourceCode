@@ -28,16 +28,24 @@ import org.apache.zookeeper.server.quorum.QuorumPeer.QuorumServer;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException;
 
 /**
+ * 此类为大多数仲裁实现验证器。实现很简单。
+ */
+
+/**
  * This class implements a validator for majority quorums. The implementation is
  * straightforward.
  *
  */
 public class QuorumMaj implements QuorumVerifier {
 
+    // 所有配置文件中指定的服务器，<sid，QuorumServer>
     private Map<Long, QuorumServer> allMembers = new HashMap<Long, QuorumServer>();
+    // 参与选举的服务器
     private Map<Long, QuorumServer> votingMembers = new HashMap<Long, QuorumServer>();
+    // 不参与选举的服务器
     private Map<Long, QuorumServer> observingMembers = new HashMap<Long, QuorumServer>();
     private long version = 0;
+    // 多少过半，算法为：votingMembers/2。大于half就算过半了。如三台服务器，2>1，2过半了
     private int half;
 
     public int hashCode() {
@@ -86,20 +94,30 @@ public class QuorumMaj implements QuorumVerifier {
             String key = entry.getKey().toString();
             String value = entry.getValue().toString();
 
+            //  # server.${myid}=${host}:${leader和follower通信端口}:${选举端口}(observer节点最后加上:observer )
+            // server.10=zk.master:2888:3888
+            // server.1=zk.slave1:2888:3888
+            // server.2=zk.slave2:2888:3888
+            // server.9=zk.observer:2888:3888:observer
             if (key.startsWith("server.")) {
                 int dot = key.indexOf('.');
                 long sid = Long.parseLong(key.substring(dot + 1));
+                // 为每个server配置项，都创建一个QuorumServer，构造方法会解析配置项
                 QuorumServer qs = new QuorumServer(sid, value);
+                // 添加到所有成员里
                 allMembers.put(Long.valueOf(sid), qs);
                 if (qs.type == LearnerType.PARTICIPANT) {
+                    // 参与选举的成员
                     votingMembers.put(Long.valueOf(sid), qs);
                 } else {
+                    // 不参与选举的成员
                     observingMembers.put(Long.valueOf(sid), qs);
                 }
             } else if (key.equals("version")) {
                 version = Long.parseLong(value, 16);
             }
         }
+        // 用于过半判断
         half = votingMembers.size() / 2;
     }
 
@@ -129,6 +147,9 @@ public class QuorumMaj implements QuorumVerifier {
         return sw.toString();
     }
 
+    /**
+     * 验证集合是否为多数。假设ackSet仅包含来自votingMembers的ack
+     */
     /**
      * Verifies if a set is a majority. Assumes that ackSet contains acks only
      * from votingMembers

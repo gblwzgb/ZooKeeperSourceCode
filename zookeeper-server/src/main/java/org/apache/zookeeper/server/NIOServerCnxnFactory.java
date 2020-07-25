@@ -165,6 +165,10 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     }
 
     /**
+     * 有一个AcceptThread可以接受新的连接，并使用简单的循环机制(round-robin)将它们分配给SelectorThread，以将其分布在SelectorThreads中。
+     * 它强制每个IP设置最大连接数，并尝试通过在重试前短暂休眠来应对文件描述符用尽的情况。
+     */
+    /**
      * There is a single AcceptThread which accepts new connections and assigns
      * them to a SelectorThread using a simple round-robin scheme to spread
      * them across the SelectorThreads. It enforces maximum number of
@@ -580,6 +584,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     }
 
     /**
+     * 该线程负责关闭过时的连接，以便未建立任何会话的连接适当的到期。
+     */
+    /**
      * This thread is responsible for closing stale connections so that
      * connections on which no session is established are properly expired.
      */
@@ -658,13 +665,23 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     private AcceptThread acceptThread;
     private final Set<SelectorThread> selectorThreads = new HashSet<SelectorThread>();
 
+    /**
+     * 配置一些属性，主线操作
+     * 1、绑定到对客户端暴露的端口上（熟悉的2181）
+     * 2、创建SelectorThread，用于select（只是创建，未start）
+     * 3、创建AcceptThread，用于接收连接请求，建立连接后把socket转给SelectorThread处理（只是创建，未start）
+     * 4、创建ConnectionExpirerThread
+     */
     @Override
     public void configure(InetSocketAddress addr, int maxcc, int backlog, boolean secure) throws IOException {
         if (secure) {
+            // NIO不支持SSL
             throw new UnsupportedOperationException("SSL isn't supported in NIOServerCnxn");
         }
+        // 配置SASL登录
         configureSaslLogin();
 
+        // 默认60
         maxClientCnxns = maxcc;
         initMaxCnxns();
         sessionlessCnxnTimeout = Integer.getInteger(ZOOKEEPER_NIO_SESSIONLESS_CNXN_TIMEOUT, 10000);
@@ -675,8 +692,10 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         cnxnExpiryQueue = new ExpiryQueue<NIOServerCnxn>(sessionlessCnxnTimeout);
         expirerThread = new ConnectionExpirerThread();
 
+        // 获取机器的CPU核数
         int numCores = Runtime.getRuntime().availableProcessors();
         // 32 cores sweet spot seems to be 4 selector threads  (32核心的最佳选择似乎是4个选择器线程)
+        // 4核 = 1，8核 = 2
         numSelectorThreads = Integer.getInteger(
             ZOOKEEPER_NIO_NUM_SELECTOR_THREADS,
             Math.max((int) Math.sqrt((float) numCores / 2), 1));
@@ -684,6 +703,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             throw new IOException("numSelectorThreads must be at least 1");
         }
 
+        // Worker的数量，CPU核数*2
         numWorkerThreads = Integer.getInteger(ZOOKEEPER_NIO_NUM_WORKER_THREADS, 2 * numCores);
         workerShutdownTimeoutMS = Long.getLong(ZOOKEEPER_NIO_SHUTDOWN_TIMEOUT, 5000);
 
@@ -694,19 +714,24 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             + (directBufferBytes == 0 ? "gathered writes." : ("" + (directBufferBytes / 1024) + " kB direct buffers."));
         LOG.info(logMsg);
         for (int i = 0; i < numSelectorThreads; ++i) {
+            // 添加SelectorThread
             selectorThreads.add(new SelectorThread(i));
         }
 
         listenBacklog = backlog;
+        // open一个ServerSocketChannel
         this.ss = ServerSocketChannel.open();
         ss.socket().setReuseAddress(true);
         LOG.info("binding to port {}", addr);
         if (listenBacklog == -1) {
+            // 绑定到端口上
             ss.socket().bind(addr);
         } else {
             ss.socket().bind(addr, listenBacklog);
         }
+        // 设置非阻塞
         ss.configureBlocking(false);
+        // 创建一个Accepter，用于接收连接
         acceptThread = new AcceptThread(ss, addr, selectorThreads);
     }
 
@@ -763,18 +788,22 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     public void start() {
         stopped = false;
         if (workerPool == null) {
+            // 创建一个fixed线程池，线程数为numWorkerThreads
             workerPool = new WorkerService("NIOWorker", numWorkerThreads, false);
         }
         for (SelectorThread thread : selectorThreads) {
+            // 遍历启动SelectorThread
             if (thread.getState() == Thread.State.NEW) {
                 thread.start();
             }
         }
         // ensure thread is started once and only once
         if (acceptThread.getState() == Thread.State.NEW) {
+            // 遍历启动AcceptThread
             acceptThread.start();
         }
         if (expirerThread.getState() == Thread.State.NEW) {
+            // 遍历启动expirerThread
             expirerThread.start();
         }
     }

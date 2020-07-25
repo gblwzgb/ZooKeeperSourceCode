@@ -36,6 +36,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此类实现快照接口。它负责存储，序列化和反序列化正确的快照。并提供对快照的访问。
+ */
+
+/**
  * This class implements the snapshot interface.
  * it is responsible for storing, serializing
  * and deserializing the right snapshot.

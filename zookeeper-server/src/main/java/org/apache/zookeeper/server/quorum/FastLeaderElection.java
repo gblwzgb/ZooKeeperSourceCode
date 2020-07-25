@@ -211,6 +211,11 @@ public class FastLeaderElection implements Election {
     LinkedBlockingQueue<Notification> recvqueue;
 
     /**
+     * 消息处理程序的多线程实现。
+     * Messenger实现了两个子类：WorkReceiver和WorkSender。
+     * 从名称中可以明显看出它们的功能。每一个都产生一个新线程。
+     */
+    /**
      * Multi-threaded implementation of message handler. Messenger
      * implements two sub-classes: WorkReceiver and  WorkSender. The
      * functionality of each is obvious from the name. Each of these
@@ -219,6 +224,9 @@ public class FastLeaderElection implements Election {
 
     protected class Messenger {
 
+        /**
+         * 在方法run()上从QuorumCnxManager实例接收消息，并处理此类消息。
+         */
         /**
          * Receives messages from instance of QuorumCnxManager on
          * method run(), and processes such messages.
@@ -900,6 +908,9 @@ public class FastLeaderElection implements Election {
     }
 
     /**
+     * 开始新一轮的leader选举。每当我们的QuorumPeer将其状态更改为LOOKING时，就会调用此方法，并将通知发送给所有其他对等方。
+     */
+    /**
      * Starts a new round of leader election. Whenever our QuorumPeer
      * changes its state to LOOKING, this method is invoked, and it
      * sends notifications to all other peers.
@@ -942,24 +953,25 @@ public class FastLeaderElection implements Election {
                 "New election. My id = {}, proposed zxid=0x{}",
                 self.getId(),
                 Long.toHexString(proposedZxid));
+            // 发送通知 todo
             sendNotifications();
 
             SyncedLearnerTracker voteSet;
 
             /*
-             * Loop in which we exchange notifications until we find a leader
+             * Loop in which we exchange notifications until we find a leader  （译：在其中交换通知直到找到领导者的Loop）
              */
 
             while ((self.getPeerState() == ServerState.LOOKING) && (!stop)) {
                 /*
                  * Remove next notification from queue, times out after 2 times
-                 * the termination time
+                 * the termination time  （译：从队列中删除下一个通知，在终止时间的2倍后超时）
                  */
                 Notification n = recvqueue.poll(notTimeout, TimeUnit.MILLISECONDS);
 
                 /*
                  * Sends more notifications if haven't received enough.
-                 * Otherwise processes new notification.
+                 * Otherwise processes new notification.  （译：如果未收到足够的通知，则发送更多通知。否则，将处理新的通知。）
                  */
                 if (n == null) {
                     if (manager.haveDelivered()) {
@@ -969,7 +981,7 @@ public class FastLeaderElection implements Election {
                     }
 
                     /*
-                     * Exponential backoff
+                     * Exponential backoff  （译：指数回退）
                      */
                     int tmpTimeOut = notTimeout * 2;
                     notTimeout = Math.min(tmpTimeOut, maxNotificationInterval);
@@ -978,6 +990,7 @@ public class FastLeaderElection implements Election {
                     /*
                      * Only proceed if the vote comes from a replica in the current or next
                      * voting view for a replica in the current or next voting view.
+                     * （译：仅当投票来自当前投票视图或下一个投票视图中的副本时，才能继续进行投票。）
                      */
                     switch (n.state) {
                     case LOOKING:
@@ -989,7 +1002,7 @@ public class FastLeaderElection implements Election {
                             LOG.debug("Ignoring notification from member with -1 zxid {}", n.sid);
                             break;
                         }
-                        // If notification > current, replace and send messages out
+                        // If notification > current, replace and send messages out  （译：如果通知>当前，请替换并发送消息）
                         if (n.electionEpoch > logicalclock.get()) {
                             logicalclock.set(n.electionEpoch);
                             recvset.clear();
@@ -1017,14 +1030,14 @@ public class FastLeaderElection implements Election {
                             Long.toHexString(n.zxid),
                             Long.toHexString(n.electionEpoch));
 
-                        // don't care about the version if it's in LOOKING state
+                        // don't care about the version if it's in LOOKING state  （译：如果为LOOKING状态，则无需在意该版本）
                         recvset.put(n.sid, new Vote(n.leader, n.zxid, n.electionEpoch, n.peerEpoch));
 
                         voteSet = getVoteTracker(recvset, new Vote(proposedLeader, proposedZxid, logicalclock.get(), proposedEpoch));
 
                         if (voteSet.hasAllQuorums()) {
 
-                            // Verify if there is any change in the proposed leader
+                            // Verify if there is any change in the proposed leader  （译：验证提议的leader是否有任何变化）
                             while ((n = recvqueue.poll(finalizeWait, TimeUnit.MILLISECONDS)) != null) {
                                 if (totalOrderPredicate(n.leader, n.zxid, n.peerEpoch, proposedLeader, proposedZxid, proposedEpoch)) {
                                     recvqueue.put(n);
@@ -1034,7 +1047,7 @@ public class FastLeaderElection implements Election {
 
                             /*
                              * This predicate is true once we don't read any new
-                             * relevant message from the reception queue
+                             * relevant message from the reception queue  (译：一旦我们没有从接收队列中读取任何新的相关消息，则该谓词（predicate）为真)
                              */
                             if (n == null) {
                                 setPeerState(proposedLeader, voteSet);
@@ -1050,8 +1063,7 @@ public class FastLeaderElection implements Election {
                     case FOLLOWING:
                     case LEADING:
                         /*
-                         * Consider all notifications from the same epoch
-                         * together.
+                         * Consider all notifications from the same epoch together.  （译：一起考虑同一时期的所有通知。）
                          */
                         if (n.electionEpoch == logicalclock.get()) {
                             recvset.put(n.sid, new Vote(n.leader, n.zxid, n.electionEpoch, n.peerEpoch, n.state));

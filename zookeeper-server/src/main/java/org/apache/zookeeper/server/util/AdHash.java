@@ -26,6 +26,7 @@ package org.apache.zookeeper.server.util;
  * See the excellent paper: A New Paradigm for collision-free hashing:
  *   Incrementality at reduced cost,  M. Bellare and D. Micciancio
  */
+// todo：
 public class AdHash {
 
     /* we use 64 bits so that we can be fast an efficient */
