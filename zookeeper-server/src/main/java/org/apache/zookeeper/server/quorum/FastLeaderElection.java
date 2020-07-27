@@ -162,7 +162,7 @@ public class FastLeaderElection implements Election {
         enum mType {
             crequest,
             challenge,
-            notification,
+            notification,  // 通知
             ack
         }
 
@@ -515,6 +515,7 @@ public class FastLeaderElection implements Election {
              * @param m     message to send
              */
             void process(ToSend m) {
+                // 转成ByteBuffer
                 ByteBuffer requestBuffer = buildMsg(m.state.ordinal(), m.leader, m.zxid, m.electionEpoch, m.peerEpoch, m.configData);
 
                 manager.toSend(m.sid, requestBuffer);
@@ -690,19 +691,22 @@ public class FastLeaderElection implements Election {
 
     /**
      * Send notifications to all peers upon a change in our vote
+     * （译：在我们的投票发生变化时向所有同行发送通知）
      */
     private void sendNotifications() {
+        // 遍历给所有投票者发通知
         for (long sid : self.getCurrentAndNextConfigVoters()) {
             QuorumVerifier qv = self.getQuorumVerifier();
+            // 创建要发送的消息体
             ToSend notmsg = new ToSend(
-                ToSend.mType.notification,
-                proposedLeader,
-                proposedZxid,
-                logicalclock.get(),
-                QuorumPeer.ServerState.LOOKING,
-                sid,
-                proposedEpoch,
-                qv.toString().getBytes());
+                ToSend.mType.notification,  // 消息类型是通知
+                proposedLeader,  // 提议谁当leader
+                proposedZxid,  // 提议的zxid
+                logicalclock.get(),  // 当前轮次
+                QuorumPeer.ServerState.LOOKING,  // 本peer(机器)的状态
+                sid,  // 发给哪个sid
+                proposedEpoch,  // 提议的Epoch
+                qv.toString().getBytes());  // 本机维护的QuorumVerifier
 
             LOG.debug(
                 "Sending Notification: {} (n.leader), 0x{} (n.zxid), 0x{} (n.round), {} (recipient),"
@@ -714,6 +718,7 @@ public class FastLeaderElection implements Election {
                 self.getId(),
                 Long.toHexString(proposedEpoch));
 
+            // 丢到队列从，等待WorkerSender线程的处理
             sendqueue.offer(notmsg);
         }
     }
@@ -857,8 +862,10 @@ public class FastLeaderElection implements Election {
      */
     private long getInitId() {
         if (self.getQuorumVerifier().getVotingMembers().containsKey(self.getId())) {
+            // 自己在投票者中，则初始化先投给自己
             return self.getId();
         } else {
+            // 否则搞个long的最小值
             return Long.MIN_VALUE;
         }
     }
@@ -870,6 +877,7 @@ public class FastLeaderElection implements Election {
      */
     private long getInitLastLoggedZxid() {
         if (self.getLearnerType() == LearnerType.PARTICIPANT) {
+            // 如果是参与投票的，获取最后处理的zxid
             return self.getLastLoggedZxid();
         } else {
             return Long.MIN_VALUE;
@@ -884,6 +892,7 @@ public class FastLeaderElection implements Election {
     private long getPeerEpoch() {
         if (self.getLearnerType() == LearnerType.PARTICIPANT) {
             try {
+                // 如果是参与投票的人，返回currentEpoch（不存在则从文件读取）
                 return self.getCurrentEpoch();
             } catch (IOException e) {
                 RuntimeException re = new RuntimeException(e.getMessage());
@@ -945,7 +954,9 @@ public class FastLeaderElection implements Election {
             int notTimeout = minNotificationInterval;
 
             synchronized (this) {
+                // 这个很重要！！投票的轮次
                 logicalclock.incrementAndGet();
+                // 更新提案（投给哪个sid，zxid，currentEpoch）
                 updateProposal(getInitId(), getInitLastLoggedZxid(), getPeerEpoch());
             }
 

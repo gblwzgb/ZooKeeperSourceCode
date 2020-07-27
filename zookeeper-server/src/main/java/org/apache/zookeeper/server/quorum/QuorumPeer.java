@@ -1605,9 +1605,15 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
         return getQuorumVerifier().getObservingMembers();
     }
 
+    /**
+     * 获取当前配置的投票者，和最新的投票者集合
+     * @return
+     */
     public synchronized Set<Long> getCurrentAndNextConfigVoters() {
+        // 获取最新的参与投票的sid集合
         Set<Long> voterIds = new HashSet<Long>(getQuorumVerifier().getVotingMembers().keySet());
         if (getLastSeenQuorumVerifier() != null) {
+            // 会进这里，获取最后一次看到的的sid集合
             voterIds.addAll(getLastSeenQuorumVerifier().getVotingMembers().keySet());
         }
         return voterIds;
@@ -1891,6 +1897,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             QuorumVerifier prevQV = quorumVerifier;
             quorumVerifier = qv;
             if (lastSeenQuorumVerifier == null || (qv.getVersion() > lastSeenQuorumVerifier.getVersion())) {
+                // 会进这里
                 lastSeenQuorumVerifier = qv;
             }
 

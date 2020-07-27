@@ -438,30 +438,41 @@ public class QuorumCnxManager {
             BufferedOutputStream buf = new BufferedOutputStream(sock.getOutputStream());
             dout = new DataOutputStream(buf);
 
-            // Sending id and challenge
+            // Sending id and challenge  （译：发送id并挑战）
 
             // First sending the protocol version (in other words - message type).
             // For backward compatibility reasons we stick to the old protocol version, unless the MultiAddress
             // feature is enabled. During rolling upgrade, we must make sure that all the servers can
             // understand the protocol version we use to avoid multiple partitions. see ZOOKEEPER-3720
+            // （译：首先发送协议版本（即消息类型）。 出于向后兼容的原因，除非启用了MultiAddress功能，否则我们将使用旧协议版本。
+            //      在滚动升级期间，我们必须确保所有服务器都能理解我们用于避免多个分区的协议版本。 参见ZOOKEEPER-3720）
             long protocolVersion = self.isMultiAddressEnabled() ? PROTOCOL_VERSION_V2 : PROTOCOL_VERSION_V1;
+            // 先写协议
             dout.writeLong(protocolVersion);
+            // 再写当前机器的serverId
             dout.writeLong(self.getId());
 
             // now we send our election address. For the new protocol version, we can send multiple addresses.
+            // （译：现在我们发送选举地址。 对于新协议版本，我们可以发送多个地址。）
             Collection<InetSocketAddress> addressesToSend = protocolVersion == PROTOCOL_VERSION_V2
                     ? self.getElectionAddress().getAllAddresses()
                     : Arrays.asList(self.getElectionAddress().getOne());
 
+            // 选举地址转成字符串，不同地址之间用|分隔
             String addr = addressesToSend.stream()
                     .map(NetUtils::formatInetAddr).collect(Collectors.joining("|"));
+            // 转成字节
             byte[] addr_bytes = addr.getBytes();
+            // 先写字节的长度，方便对方解码
             dout.writeInt(addr_bytes.length);
+            // 写选举地址
             dout.write(addr_bytes);
+            // 发送
             dout.flush();
 
             din = new DataInputStream(new BufferedInputStream(sock.getInputStream()));
         } catch (IOException e) {
+            // 有io异常，则视为失败，关闭本机发起的连接
             LOG.warn("Ignoring exception reading or writing challenge: ", e);
             closeSocket(sock);
             return false;
@@ -474,30 +485,40 @@ public class QuorumCnxManager {
             authLearner.authenticate(sock, qps.hostname);
         }
 
-        // If lost the challenge, then drop the new connection
-        if (sid > self.getId()) {
+        // If lost the challenge, then drop the new connection  （译：如果挑战输了，则断开新连接）
+        if (sid > self.getId()) {  // 对方的sid比本机大，则对方赢，关掉本机发起的连接
             LOG.info(
                 "Have smaller server identifier, so dropping the connection: ({}, {})",
                 sid,
                 self.getId());
+            // 关闭本机发起的连接
             closeSocket(sock);
-            // Otherwise proceed with the connection
+            // Otherwise proceed with the connection  （译：否则继续进行连接）
         } else {
+            // 本机赢了，创建一个SendWorker
             SendWorker sw = new SendWorker(sock, sid);
+            // 创建一个RecvWorker
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
+            // SendWorker持有RecvWorker的引用
             sw.setRecv(rw);
 
+            // 如果这个sid之前已经有个SendWorker了，则结束掉
             SendWorker vsw = senderWorkerMap.get(sid);
 
             if (vsw != null) {
+                // 结束SendWorker
                 vsw.finish();
             }
 
+            // 缓存起来
             senderWorkerMap.put(sid, sw);
 
+            // 给sid创建一个消息发送队列，容量最多1，防止发送过时的通知消息
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
+            // 启动SendWorker线程
             sw.start();
+            // 启动RecvWorker线程
             rw.start();
 
             return true;
@@ -648,23 +669,31 @@ public class QuorumCnxManager {
     /**
      * Processes invoke this message to queue a message to send. Currently,
      * only leader election uses it.
+     * 译：进程调用此消息以使要发送的消息排队。当前，只有领导人选举使用它。
      */
     public void toSend(Long sid, ByteBuffer b) {
         /*
          * If sending message to myself, then simply enqueue it (loopback).
+         * （译：如果要向自己发送消息，则只需将其放入队列（回送）。）
          */
         if (this.mySid == sid) {
             b.position(0);
             addToRecvQueue(new Message(b.duplicate(), sid));
             /*
              * Otherwise send to the corresponding thread to send.
+             * （译：否则发送到相应的线程发送。）
              */
         } else {
             /*
              * Start a new connection if doesn't have one already.
+             * （译：开始一个新连接如果尚未建立的话）
              */
+            // 扩展内容：不存在的时候，才会执行compute，即new CircularBlockingQueue
+            // 给每个sid维护一个发送消息的队列
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
+            // 将消息入队（这个sid对应的发送队列）
             addToSendQueue(bq, b);
+            // 连接到sid（有前置判断，如果已经连过就忽略）
             connectOne(sid);
         }
     }
@@ -677,9 +706,9 @@ public class QuorumCnxManager {
      *  @param sid  server id
      *  @return boolean success indication
      */
-    // fixme：看到这里
     synchronized boolean connectOne(long sid, MultipleAddresses electionAddr) {
         if (senderWorkerMap.get(sid) != null) {
+            // 对这个sid的连接已经存在了，直接返回
             LOG.debug("There is a connection already for server {}", sid);
             if (self.isMultiAddressEnabled() && electionAddr.size() > 1 && self.isMultiAddressReachabilityCheckEnabled()) {
                 // since ZOOKEEPER-3188 we can use multiple election addresses to reach a server. It is possible, that the
@@ -696,9 +725,12 @@ public class QuorumCnxManager {
             if (self.isSslQuorum()) {
                 sock = self.getX509Util().createSSLSocket();
             } else {
+                // 创建一个客户端socket
                 sock = new Socket();
             }
+            // 设置一些socket的选项（属性）
             setSockOpts(sock);
+            // 连接过去
             sock.connect(electionAddr.getReachableOrOne(), cnxTO);
             if (sock instanceof SSLSocket) {
                 SSLSocket sslSock = (SSLSocket) sock;
@@ -718,6 +750,7 @@ public class QuorumCnxManager {
             if (quorumSaslAuthEnabled) {
                 initiateConnectionAsync(sock, sid);
             } else {
+                // 初始化连接
                 initiateConnection(sock, sid);
             }
             return true;
@@ -960,6 +993,7 @@ public class QuorumCnxManager {
         @Override
         public void run() {
             if (!shutdown) {
+                // 所有的选举地址
                 Set<InetSocketAddress> addresses;
 
                 if (self.getQuorumListenOnAllIPs()) {  // 默认false

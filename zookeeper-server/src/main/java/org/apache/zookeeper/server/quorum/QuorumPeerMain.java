@@ -209,6 +209,7 @@ public class QuorumPeerMain {
             quorumPeer.setClientPortListenBacklog(config.getClientPortListenBacklog());
             // 设置"DB"，在内存中
             quorumPeer.setZKDatabase(new ZKDatabase(quorumPeer.getTxnFactory()));
+            // todo:这里看下
             quorumPeer.setQuorumVerifier(config.getQuorumVerifier(), false);
             if (config.getLastSeenQuorumVerifier() != null) {
                 quorumPeer.setLastSeenQuorumVerifier(config.getLastSeenQuorumVerifier(), false);
