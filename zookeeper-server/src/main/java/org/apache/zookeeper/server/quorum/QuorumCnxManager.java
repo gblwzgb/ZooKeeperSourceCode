@@ -1339,11 +1339,13 @@ public class QuorumCnxManager {
                         if (bq != null) {
                             b = pollSendQueue(bq, 1000, TimeUnit.MILLISECONDS);
                         } else {
+                            // 没消息要发，退出循环
                             LOG.error("No queue of incoming messages for server {}", sid);
                             break;
                         }
 
                         if (b != null) {
+                            // 记录最后发送的消息
                             lastMessageSent.put(sid, b);
                             send(b);
                         }
@@ -1358,6 +1360,7 @@ public class QuorumCnxManager {
                     QuorumCnxManager.this.mySid,
                     e);
             }
+            // 关闭socket，清理
             this.finish();
 
             LOG.warn("Send worker leaving thread id {} my id = {}", sid, self.getId());

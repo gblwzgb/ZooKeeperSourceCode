@@ -55,6 +55,8 @@ public class ZooDefs {
 
         int getChildren = 8;
 
+        // sync命令用于强制同步，由于请求在半数以上的zk server上生效就表示此请求生效，那么就会有一些zk server上的数据是旧的。sync命令就是强制同步所有的更新操作。
+        // 参考：https://www.cnblogs.com/senlinyang/p/7833669.html，通过./zkCli.sh -server localhost:2181，连接到某台服务器上，就可以直接命令了。
         int sync = 9;
 
         int ping = 11;

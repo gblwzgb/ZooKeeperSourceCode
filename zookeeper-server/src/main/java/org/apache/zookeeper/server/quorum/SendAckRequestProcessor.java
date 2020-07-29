@@ -43,6 +43,7 @@ public class SendAckRequestProcessor implements RequestProcessor, Flushable {
             try {
                 si.logLatency(ServerMetrics.getMetrics().PROPOSAL_ACK_CREATION_LATENCY);
 
+                // 写一个ack数据包给leader
                 learner.writePacket(qp, false);
             } catch (IOException e) {
                 LOG.warn("Closing connection to leader, exception during packet send", e);

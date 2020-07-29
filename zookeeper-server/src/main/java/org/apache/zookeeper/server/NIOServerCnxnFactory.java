@@ -295,7 +295,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 if (!selectorIterator.hasNext()) {
                     selectorIterator = selectorThreads.iterator();
                 }
+                // 获取下一个SelectorThread
                 SelectorThread selectorThread = selectorIterator.next();
+                // 将socket连接，交给SelectorThread，让它执行select
                 if (!selectorThread.addAcceptedConnection(sc)) {
                     throw new IOException("Unable to add connection to selector queue"
                                           + (stopped ? " (shutdown in progress)" : ""));
@@ -477,6 +479,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             cnxn.disableSelectable();
             key.interestOps(0);
             touchCnxn(cnxn);
+            // 丢到线程池里执行
             workerPool.schedule(workRequest);
         }
 

@@ -51,7 +51,7 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
     private static final Logger LOG = LoggerFactory.getLogger(FollowerZooKeeperServer.class);
 
     /*
-     * Pending sync requests
+     * Pending sync requests  （译：等待同步请求）
      */ ConcurrentLinkedQueue<Request> pendingSyncs;
 
     /**
@@ -68,6 +68,8 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
 
     @Override
     protected void setupRequestProcessors() {
+        // 链1：SyncRequestProcessor -> SendAckRequestProcessor
+        // 链2：FollowerRequestProcessor -> CommitProcessor -> FinalRequestProcessor
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         commitProcessor = new CommitProcessor(finalProcessor, Long.toString(getServerId()), true, getZooKeeperServerListener());
         commitProcessor.start();
@@ -77,17 +79,27 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
         syncProcessor.start();
     }
 
+    // 将事务挂起，主要用来校验：提议的顺序必须要和commit的顺序一致。
     LinkedBlockingQueue<Request> pendingTxns = new LinkedBlockingQueue<Request>();
 
     public void logRequest(TxnHeader hdr, Record txn, TxnDigest digest) {
         Request request = new Request(hdr.getClientId(), hdr.getCxid(), hdr.getType(), hdr, txn, hdr.getZxid());
         request.setTxnDigest(digest);
-        if ((request.zxid & 0xffffffffL) != 0) {
+        if ((request.zxid & 0xffffffffL) != 0) {  // 这个请求的zxid的低32位>0
+            // 先将请求挂起，等待commit请求过来
             pendingTxns.add(request);
         }
+        // 交给SyncRequestProcessor处理，同步转异步，异步处理完后，会发ack给leader，leader收到过半的ack后，会发commit过来
         syncProcessor.processRequest(request);
     }
 
+    /**
+     * 收到COMMIT消息后，最终将调用此方法，
+     * 该方法将COMMIT中的zxid与（希望）pendingTxns队列的头匹配，
+     * 并将其交给commitProcessor进行提交。
+     *
+     * @param zxid - 如果存在的话，必须对应于pendingTxns的头部
+     */
     /**
      * When a COMMIT message is received, eventually this method is called,
      * which matches up the zxid from the COMMIT with (hopefully) the head of
@@ -101,12 +113,15 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
         }
         long firstElementZxid = pendingTxns.element().zxid;
         if (firstElementZxid != zxid) {
+            // 挂起的事务，和要提交的事务不一致，退出系统...
             LOG.error("Committing zxid 0x" + Long.toHexString(zxid)
                       + " but next pending txn 0x" + Long.toHexString(firstElementZxid));
             ServiceUtils.requestSystemExit(ExitCode.UNMATCHED_TXN_COMMIT.getValue());
         }
+        // 移除当前挂起的事务
         Request request = pendingTxns.remove();
         request.logLatency(ServerMetrics.getMetrics().COMMIT_PROPAGATION_LATENCY);
+        // 将这个事务提交到commitProcessor中，等待异步处理
         commitProcessor.commit(request);
     }
 

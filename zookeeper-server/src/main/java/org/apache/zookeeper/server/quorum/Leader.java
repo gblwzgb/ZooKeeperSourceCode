@@ -287,9 +287,11 @@ public class Leader extends LearnerMaster {
         if (self.getQuorumListenOnAllIPs()) {
             addresses = self.getQuorumAddress().getWildcardAddresses();
         } else {
+            // 获取自己的通信地址
             addresses = self.getQuorumAddress().getAllAddresses();
         }
 
+        // 绑定到通信地址的端口上，并加入serverSockets列表中
         addresses.stream()
           .map(address -> createServerSocket(address, self.shouldUsePortUnification(), self.isSslQuorum()))
           .filter(Optional::isPresent)
@@ -322,78 +324,92 @@ public class Leader extends LearnerMaster {
 
     /**
      * This message is for follower to expect diff
+     * （译：该消息供follower期待差异）
      */
     static final int DIFF = 13;
 
     /**
      * This is for follower to truncate its logs
+     * （译：这是供follower truncate其日志）
      */
     static final int TRUNC = 14;
 
     /**
      * This is for follower to download the snapshots
+     * （译：这是供follower下载快照）
      */
     static final int SNAP = 15;
 
     /**
      * This tells the leader that the connecting peer is actually an observer
+     * （译：这告诉leader，连接端实际上是observer）
      */
     static final int OBSERVERINFO = 16;
 
     /**
      * This message type is sent by the leader to indicate it's zxid and if
      * needed, its database.
+     * （译：leader发送此消息类型以指示它的zxid以及（如果需要）其数据库。）
      */
     static final int NEWLEADER = 10;
 
     /**
      * This message type is sent by a follower to pass the last zxid. This is here
      * for backward compatibility purposes.
+     * （译：follower发送此消息类型以传递最后的zxid。这是出于向后兼容的目的。）
      */
     static final int FOLLOWERINFO = 11;
 
     /**
      * This message type is sent by the leader to indicate that the follower is
-     * now uptodate andt can start responding to clients.
+     * now uptodate and can start responding to clients.
+     * （译：leader发送此消息类型，以指示follower现在uptodate，并且可以开始响应客户端。）
      */
     static final int UPTODATE = 12;
 
     /**
      * This message is the first that a follower receives from the leader.
      * It has the protocol version and the epoch of the leader.
+     * （译：此消息是follower从leader那里收到的第一条消息。它具有协议版本和leader的epoch。）
      */
     public static final int LEADERINFO = 17;
 
     /**
      * This message is used by the follow to ack a proposed epoch.
+     * （译：后续操作将使用此消息来确认提议的epoch。）
      */
     public static final int ACKEPOCH = 18;
 
     /**
      * This message type is sent to a leader to request and mutation operation.
      * The payload will consist of a request header followed by a request.
+     * （译：此消息类型发送给leader以请求和进行变动操作。payload将由一个请求头和一个请求组成。）
      */
     static final int REQUEST = 1;
 
     /**
      * This message type is sent by a leader to propose a mutation.
+     * （译：leader发送此消息类型以提出变动。）
      */
     public static final int PROPOSAL = 2;
 
     /**
      * This message type is sent by a follower after it has synced a proposal.
+     * （译：follower在同步提议后发送此消息类型。）
      */
     static final int ACK = 3;
 
     /**
      * This message type is sent by a leader to commit a proposal and cause
      * followers to start serving the corresponding data.
+     * （译：leader发送此消息类型以commit提案，并导致followers开始serving相应的数据。）
      */
     static final int COMMIT = 4;
 
     /**
      * This message type is enchanged between follower and leader (initiated by
      * follower) to determine liveliness.
+     * （译：在follower和leader（由follower发起）之间交换此消息类型以确定存活。）
      */
     static final int PING = 5;
 
@@ -405,11 +421,13 @@ public class Leader extends LearnerMaster {
     /**
      * This message is a reply to a synchronize command flushing the pipe
      * between the leader and the follower.
+     * （译：该消息是对同步命令的答复，该命令会flushing leader和follower之间的管道。）
      */
     static final int SYNC = 7;
 
     /**
      * This message type informs observers of a committed proposal.
+     * （译：此消息类型通知观察者已commit的提案）
      */
     static final int INFORM = 8;
 
@@ -423,8 +441,10 @@ public class Leader extends LearnerMaster {
      */
     static final int INFORMANDACTIVATE = 19;
 
+    // 未完成的提议，<zxid，提议>
     final ConcurrentMap<Long, Proposal> outstandingProposals = new ConcurrentHashMap<Long, Proposal>();
 
+    // 待commit的提议，这个应该是集群启动时同步数据用的
     private final ConcurrentLinkedQueue<Proposal> toBeApplied = new ConcurrentLinkedQueue<Proposal>();
 
     // VisibleForTesting
@@ -446,13 +466,16 @@ public class Leader extends LearnerMaster {
         @Override
         public void run() {
             if (!stop.get() && !serverSockets.isEmpty()) {
+                // 创建一个定长的线程池
                 ExecutorService executor = Executors.newFixedThreadPool(serverSockets.size());
                 CountDownLatch latch = new CountDownLatch(serverSockets.size());
 
+                // 提交线程池任务，每个通信地址对应一个LearnerCnxAcceptorHandler
                 serverSockets.forEach(serverSocket ->
                         executor.submit(new LearnerCnxAcceptorHandler(serverSocket, latch)));
 
                 try {
+                    // 阻塞到所有线程退出
                     latch.await();
                 } catch (InterruptedException ie) {
                     LOG.error("Interrupted while sleeping in LearnerCnxAcceptor.", ie);
@@ -490,6 +513,7 @@ public class Leader extends LearnerMaster {
                     Thread.currentThread().setName("LearnerCnxAcceptorHandler-" + serverSocket.getLocalSocketAddress());
 
                     while (!stop.get()) {
+                        // 接收连接
                         acceptConnections();
                     }
                 } catch (Exception e) {
@@ -515,7 +539,9 @@ public class Leader extends LearnerMaster {
                     socket.setTcpNoDelay(nodelay);
 
                     BufferedInputStream is = new BufferedInputStream(socket.getInputStream());
+                    // 为每个连接（也可以说是为每个Learner）创建一个LearnerHandler
                     LearnerHandler fh = new LearnerHandler(socket, is, Leader.this);
+                    // 启动LearnerHandler
                     fh.start();
                 } catch (SocketException e) {
                     error = true;
@@ -576,6 +602,7 @@ public class Leader extends LearnerMaster {
     void lead() throws IOException, InterruptedException {
         self.end_fle = Time.currentElapsedTime();
         long electionTimeTaken = self.end_fle - self.start_fle;
+        // 设置选举花费的时间
         self.setElectionTimeTaken(electionTimeTaken);
         ServerMetrics.getMetrics().ELECTION_TIME.add(electionTimeTaken);
         LOG.info("LEADING - LEADER ELECTION TOOK - {} {}", electionTimeTaken, QuorumPeer.FLE_TIME_UNIT);
@@ -585,25 +612,32 @@ public class Leader extends LearnerMaster {
         zk.registerJMX(new LeaderBean(this, zk), self.jmxLocalPeerBean);
 
         try {
+            // 设置ZAB协议的状态为DISCOVERY
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
             self.tick.set(0);
+            // 加载数据并快照
             zk.loadData();
 
             leaderStateSummary = new StateSummary(self.getCurrentEpoch(), zk.getLastProcessedZxid());
 
-            // Start thread that waits for connection requests from
-            // new followers.
+            // Start thread that waits for connection requests from new followers.
+            // （译：等待来自新followers的连接请求的启动线程。）
             cnxAcceptor = new LearnerCnxAcceptor();
+            // 启动线程
             cnxAcceptor.start();
 
+            // todo：
             long epoch = getEpochToPropose(self.getId(), self.getAcceptedEpoch());
 
+            // 创建一个zxid，左32位为epoch，右32位为0
             zk.setZxid(ZxidUtils.makeZxid(epoch, 0));
 
             synchronized (this) {
+                // 最后提议的zxid
                 lastProposed = zk.getZxid();
             }
 
+            // 创建数据包，包含最后提议的zxid
             newLeaderProposal.packet = new QuorumPacket(NEWLEADER, zk.getZxid(), null, null);
 
             if ((newLeaderProposal.packet.getZxid() & 0xffffffffL) != 0) {
@@ -632,6 +666,20 @@ public class Leader extends LearnerMaster {
                 // so before LearnerHandlers return from their waitForEpochAck
                 // hence before they construct the NEWLEADER message containing
                 // the last-seen-quorumverifier of the leader, which we change below
+                /**
+                 * 译：
+                 * 这是在ZOOKEEPER-1783中添加的。初始配置的版本为0（用户未明确指定；配置文件中缺少版本会解释为version = 0）。
+                 * 建立配置后，我们想增加其版本，使其比其他尚未建立的初始配置（例如尝试加入集成服务器的配置更具有优势） ，而不是完整的配置）。
+                 * 我们选择将新版本设置为NEWLEADER消息之一。但是，在执行此操作之前，必须先就新版本达成协议，
+                 * 因此我们只能在发送/接收UPTODATE时更改版本，而在发送/接收NEWLEADER时不能更改版本。
+                 * 换句话说，由于curQV已提交定额验证程序，因此我们无法在此处更改，并且我们仍未就我们要使用的新版本达成协议。
+                 * 相反，我们使用与NEWLEADER消息一起发送的lastSeenQuorumVerifier，因此这是一种让关注者了解新版本的好方法。
+                 * （发送带有NEWLEADER的lastSeenQuorumVerifier的原始原因是，领导者可以在开始提议操作之前完成发现的任何可能未提交的重新配置。
+                 *    这里，我们正在重用相同的代码路径，以就新版本号达成共识。）
+                 *
+                 *  重要的是，必须在领导者执行waitForEpochAck之前完成此操作，因此，在LearnerHandlers从其waitForEpochAck返回之前，
+                 *  因此，在构造包含领导者最后看到的法定验证者的NEWLEADER消息之前，我们将在下面进行更改
+                 */
                 try {
                     QuorumVerifier newQV = self.configFromString(curQV.toString());
                     newQV.setVersion(zk.getZxid());
@@ -649,6 +697,7 @@ public class Leader extends LearnerMaster {
             // We have to get at least a majority of servers in sync with
             // us. We do this by waiting for the NEWLEADER packet to get
             // acknowledged
+            // （译：我们必须至少与大多数服务器保持同步。 我们通过等待NEWLEADER数据包得到确认来完成此操作）
 
             waitForEpochAck(self.getId(), leaderStateSummary);
             self.setCurrentEpoch(epoch);
@@ -898,18 +947,26 @@ public class Leader extends LearnerMaster {
         // pending all wait for a quorum of old and new config, so it's not possible to get enough acks
         // for an operation without getting enough acks for preceding ops. But in the future if multiple
         // concurrent reconfigs are allowed, this can happen.
+        /*
+         * 译：
+         * 确保操作按顺序提交。 通过重新配置，现在有可能不同的操作等待不同的ack组，而我们仍然要强制要求它们按顺序提交。
+         * 当前，我们仅允许进行一次未完成的重新配置，以便在重新配置未决期间提出的重新配置和随后提出的未完成操作都将等待一定数量的新旧配置，
+         * 因此，如果没有为先前的操作获得足够的确认，就不可能获得足够的操作确认。 。
+         * 但是将来如果允许多个并发重新配置，则可能会发生这种情况。
+         */
         if (outstandingProposals.containsKey(zxid - 1)) {
             return false;
         }
 
-        // in order to be committed, a proposal must be accepted by a quorum.
+        // in order to be committed, a proposal must be accepted by a quorum.  （译：为了被committed，提案必须达到法定人数（即超过半数）。）
         //
-        // getting a quorum from all necessary configurations.
+        // getting a quorum from all necessary configurations.  （译：从所有必要的配置中获得仲裁。）
         if (!p.hasAllQuorums()) {
+            // 如果还没超过半数，返回false，不继续后面的commit流程了
             return false;
         }
 
-        // commit proposals in order
+        // commit proposals in order  （译：按顺序提交提案）
         if (zxid != lastCommitted + 1) {
             LOG.warn(
                 "Commiting zxid 0x{} from {} noy first!",
@@ -918,6 +975,7 @@ public class Leader extends LearnerMaster {
             LOG.warn("First is {}", (lastCommitted + 1));
         }
 
+        // 移除
         outstandingProposals.remove(zxid);
 
         if (p.request != null) {
@@ -952,9 +1010,12 @@ public class Leader extends LearnerMaster {
             //turnOffFollowers();
         } else {
             p.request.logLatency(ServerMetrics.getMetrics().QUORUM_ACK_LATENCY);
+            /** 发commit消息给所有的Learner */
             commit(zxid);
+            // 给所有observer发inform消息
             inform(p);
         }
+        // commit到CommitProcessor处理器的committedRequests队列中，等待异步处理
         zk.commitProcessor.commit(p.request);
         if (pendingSyncs.containsKey(zxid)) {
             for (LearnerSyncRequest r : pendingSyncs.remove(zxid)) {
@@ -966,8 +1027,14 @@ public class Leader extends LearnerMaster {
     }
 
     /**
-     * Keep a count of acks that are received by the leader for a particular
-     * proposal
+     * 保留leader收到的特定提案的计数
+     *
+     * @param zxid, 发出的提案的zxid
+     * @param sid, 发送ack的服务器的ID
+     * @param followerAddr
+     */
+    /**
+     * Keep a count of acks that are received by the leader for a particular proposal
      *
      * @param zxid, the zxid of the proposal sent out
      * @param sid, the id of the server that sent the ack
@@ -978,8 +1045,8 @@ public class Leader extends LearnerMaster {
         if (!allowedToCommit) {
             return; // last op committed was a leader change - from now on
         }
-        // the new leader should commit
-        if (LOG.isTraceEnabled()) {
+        // the new leader should commit  （译：新的leader应该commit）
+        if (LOG.isTraceEnabled()) {  // 日志相关
             LOG.trace("Ack zxid: 0x{}", Long.toHexString(zxid));
             for (Proposal p : outstandingProposals.values()) {
                 long packetZxid = p.packet.getZxid();
@@ -993,6 +1060,8 @@ public class Leader extends LearnerMaster {
              * We no longer process NEWLEADER ack with this method. However,
              * the learner sends an ack back to the leader after it gets
              * UPTODATE, so we just ignore the message.
+             * （译：我们不再使用这种方法处理NEWLEADER ack。
+             *      但是，learner在获得UPTODATE之后会向leader发送一个确认，因此我们只是忽略该消息。）
              */
             return;
         }
@@ -1002,6 +1071,7 @@ public class Leader extends LearnerMaster {
             return;
         }
         if (lastCommitted >= zxid) {
+            // 这个提案的ack已经过时了。。
             LOG.debug(
                 "proposal has already been committed, pzxid: 0x{} zxid: 0x{}",
                 Long.toHexString(lastCommitted),
@@ -1009,8 +1079,10 @@ public class Leader extends LearnerMaster {
             // The proposal has already been committed
             return;
         }
+        // 获取提议，这个是在发起提议给Learner的时候put的
         Proposal p = outstandingProposals.get(zxid);
         if (p == null) {
+            // 不存在则忽略这个ack
             LOG.warn("Trying to commit future proposal: zxid 0x{} from {}", Long.toHexString(zxid), followerAddr);
             return;
         }
@@ -1019,8 +1091,10 @@ public class Leader extends LearnerMaster {
             p.request.logLatency(ServerMetrics.getMetrics().ACK_LATENCY, Long.toString(sid));
         }
 
+        // 添加ack到这个提案中
         p.addAck(sid);
 
+        // 尝试commit（过半成功）
         boolean hasCommitted = tryToCommit(p, zxid, followerAddr);
 
         // If p is a reconfiguration, multiple other operations may be ready to be committed,
@@ -1031,6 +1105,13 @@ public class Leader extends LearnerMaster {
         // for an operation without getting enough acks for preceding ops. But in the future if multiple
         // concurrent reconfigs are allowed, this can happen and then we need to check whether some pending
         // ops may already have enough acks and can be committed, which is what this code does.
+
+        /*
+         * 译：如果p是重新配置，则由于准备等待不同组的ack，因此可以准备执行多个其他操作。
+         *    当前，我们一次只允许进行一次未完成的重新配置，以使在重新配置未决期间提出的重新配置和随后提出的未完成操作都将等待一定数量的新旧配置，
+         *    因此如果没有足够的确认，就不可能为操作获得足够的确认。 对于之前的操作。
+         *    但是在将来，如果允许多个并发重新配置，则可能会发生这种情况，然后我们需要检查某些待处理的操作是否可能已经具有足够的确认数并可以提交，这就是此代码的作用。
+         */
 
         if (hasCommitted && p.request != null && p.request.getHdr().getType() == OpCode.reconfig) {
             long curZxid = zxid;
@@ -1056,6 +1137,8 @@ public class Leader extends LearnerMaster {
          * FinalRequestProcessor.processRequest MUST process the request
          * synchronously!
          *
+         * （译：该请求处理器仅维护toBeApplied列表。为此，接下来必须是FinalRequestProcessor，且FinalRequestProcessor.processRequest必须同步处理请求！）
+         *
          * @param next
          *                a reference to the FinalRequestProcessor
          */
@@ -1077,14 +1160,17 @@ public class Leader extends LearnerMaster {
          * @see org.apache.zookeeper.server.RequestProcessor#processRequest(org.apache.zookeeper.server.Request)
          */
         public void processRequest(Request request) throws RequestProcessorException {
+            // 同步调用FinalRequestProcessor.processRequest
             next.processRequest(request);
 
             // The only requests that should be on toBeApplied are write
             // requests, for which we will have a hdr. We can't simply use
             // request.zxid here because that is set on read requests to equal
             // the zxid of the last write op.
+            // （译：应该在toBeApplied上的唯一请求是写请求，对此我们将有一个hdr。 我们不能在这里简单地使用request.zxid，因为在读请求上将其设置为等于上次写操作的zxid。）
             if (request.getHdr() != null) {
                 long zxid = request.getHdr().getZxid();
+                // 完成后，从缓存中删除
                 Iterator<Proposal> iter = leader.toBeApplied.iterator();
                 if (iter.hasNext()) {
                     Proposal p = iter.next();
@@ -1132,6 +1218,7 @@ public class Leader extends LearnerMaster {
         }
     }
 
+    // 最后发起commit到Learner的zxid
     long lastCommitted = -1;
 
     /**
@@ -1141,9 +1228,11 @@ public class Leader extends LearnerMaster {
      */
     public void commit(long zxid) {
         synchronized (this) {
+            // 最后提交的zxid
             lastCommitted = zxid;
         }
         QuorumPacket qp = new QuorumPacket(Leader.COMMIT, zxid, null, null);
+        // 发送给所有的Learner，commit命令（通过队列来异步）
         sendPacket(qp);
         ServerMetrics.getMetrics().COMMIT_COUNT.add(1);
     }
@@ -1186,6 +1275,7 @@ public class Leader extends LearnerMaster {
         sendObserverPacket(buildInformAndActivePacket(proposal.request.zxid, designatedLeader, proposal.packet.getData()));
     }
 
+    // 最后提议的zxid
     long lastProposed;
 
     @Override
@@ -1213,6 +1303,7 @@ public class Leader extends LearnerMaster {
 
     /**
      * create a proposal and send it out to all the members
+     * （译：创建一个提案并将其发送给所有成员）
      *
      * @param request
      * @return the proposal that is queued to send to all the members
@@ -1223,13 +1314,16 @@ public class Leader extends LearnerMaster {
          * election. Force a re-election instead. See ZOOKEEPER-1277
          */
         if ((request.zxid & 0xffffffffL) == 0xffffffffL) {
+            // （译：zxid的低32位已翻转，迫使重新选举，因此新的纪元开始）
             String msg = "zxid lower 32 bits have rolled over, forcing re-election, and therefore new epoch start";
             shutdown(msg);
             throw new XidRolloverException(msg);
         }
 
+        // 序列化request
         byte[] data = SerializeUtils.serializeRequest(request);
         proposalStats.setLastBufferSize(data.length);
+        // 创建一个PROPOSAL的数据包
         QuorumPacket pp = new QuorumPacket(Leader.PROPOSAL, request.zxid, data, null);
 
         Proposal p = new Proposal();
@@ -1240,6 +1334,7 @@ public class Leader extends LearnerMaster {
             p.addQuorumVerifier(self.getQuorumVerifier());
 
             if (request.getHdr().getType() == OpCode.reconfig) {
+                // 设置最后看到的QuorumVerifier
                 self.setLastSeenQuorumVerifier(request.qv, true);
             }
 
@@ -1250,7 +1345,9 @@ public class Leader extends LearnerMaster {
             LOG.debug("Proposing:: {}", request);
 
             lastProposed = p.packet.getZxid();
+            // 加到缓存里，收到ack的时候，会取出来
             outstandingProposals.put(lastProposed, p);
+            // 发送给所有的LearnerHandler，因为是直接加到等待队列里（同步转异步），所以很快
             sendPacket(pp);
         }
         ServerMetrics.getMetrics().PROPOSAL_COUNT.add(1);
@@ -1285,8 +1382,10 @@ public class Leader extends LearnerMaster {
     }
 
     /**
-     * lets the leader know that a follower is capable of following and is done
-     * syncing
+     * 让leader知道follower有能力following并完成同步
+     */
+    /**
+     * lets the leader know that a follower is capable of following and is done syncing
      *
      * @param handler handler of the follower
      * @return last proposed zxid
@@ -1403,6 +1502,7 @@ public class Leader extends LearnerMaster {
                 epoch = lastAcceptedEpoch + 1;
             }
             if (isParticipant(sid)) {
+                // 如果是参与选举的人，加入connectingFollowers Set
                 connectingFollowers.add(sid);
             }
             QuorumVerifier verifier = self.getQuorumVerifier();
@@ -1533,8 +1633,8 @@ public class Leader extends LearnerMaster {
     }
 
     /**
-     * Process NEWLEADER ack of a given sid and wait until the leader receives
-     * sufficient acks.
+     * Process NEWLEADER ack of a given sid and wait until the leader receives sufficient acks.
+     * （译：在给定的sid后面处理NEWLEADER的ack，并等待直到leader收到足够的ack。）
      *
      * @param sid
      * @throws InterruptedException
@@ -1559,15 +1659,18 @@ public class Leader extends LearnerMaster {
             }
 
             /*
-             * Note that addAck already checks that the learner
-             * is a PARTICIPANT.
+             * Note that addAck already checks that the learner is a PARTICIPANT.
+             * （译：请注意，addAck已经检查出learner是否为参与者。）
              */
             newLeaderProposal.addAck(sid);
 
             if (newLeaderProposal.hasAllQuorums()) {
+                // 集群已经形成了
                 quorumFormed = true;
+                // 通知其他等待的LearnerHandler线程
                 newLeaderProposal.qvAcksetPairs.notifyAll();
             } else {
+                // 阻塞等待一定时间
                 long start = Time.currentElapsedTime();
                 long cur = start;
                 long end = start + self.getInitLimit() * self.getTickTime();

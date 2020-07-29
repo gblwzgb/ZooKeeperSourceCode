@@ -80,6 +80,8 @@ public class Request {
 
     public final ServerCnxn cnxn;
 
+    // 写请求，这个不为null，读请求为null。
+    // 通过这个是否为null来区分读、写请求
     private TxnHeader hdr;
 
     private Record txn;

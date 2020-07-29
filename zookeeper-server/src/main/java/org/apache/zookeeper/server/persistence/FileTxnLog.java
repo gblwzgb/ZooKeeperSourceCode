@@ -53,6 +53,46 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此类实现TxnLog接口。它提供api来访问txnlogs并向其中添加entries。
+ * 事务日志的格式如下：
+ *
+ *    LogFile:
+ *        FileHeader TxnList ZeroPad
+ *
+ *    FileHeader: {
+ *        magic 4bytes (ZKLG)
+ *        version 4bytes
+ *        dbid 8bytes
+ *      }
+ *
+ *    TxnList:
+ *        Txn || Txn TxnList
+ *
+ *    Txn:
+ *        checksum Txnlen TxnHeader Record 0x42
+ *
+ *    checksum: 8bytes Adler32 is currently used
+ *      calculated across payload -- Txnlen, TxnHeader, Record and 0x42
+ *
+ *    Txnlen:
+ *        len 4bytes
+ *
+ *    TxnHeader: {
+ *        sessionid 8bytes
+ *        cxid 4bytes
+ *        zxid 8bytes
+ *        time 8bytes
+ *        type 4bytes
+ *      }
+ *
+ *    Record:
+ *        See Jute definition file for details on the various record types
+ *
+ *    ZeroPad:
+ *        0 padded to EOF (filled during preallocation stage)
+ */
+
+/**
  * This class implements the TxnLog interface. It provides api's
  * to access the txnlogs and add entries to it.
  * <p>
@@ -151,6 +191,7 @@ public class FileTxnLog implements TxnLog, Closeable {
     volatile FileOutputStream fos = null;
 
     File logDir;
+    // 强制同步，默认true
     private final boolean forceSync = !System.getProperty("zookeeper.forceSync", "yes").equals("no");
     long dbId;
     private final Queue<FileOutputStream> streamsToFlush = new ArrayDeque<>();
@@ -232,10 +273,12 @@ public class FileTxnLog implements TxnLog, Closeable {
      * rollover the current log file to a new one.
      * @throws IOException
      */
+    // todo：这个不是很懂，不是每个zxid一个文件吗？
     public synchronized void rollLog() throws IOException {
         if (logStream != null) {
             this.logStream.flush();
             prevLogsRunningTotal += getCurrentLogSize();
+            // 清空，这样下次append的时候，会创建新的流
             this.logStream = null;
             oa = null;
 
@@ -269,6 +312,7 @@ public class FileTxnLog implements TxnLog, Closeable {
     @Override
     public synchronized boolean append(TxnHeader hdr, Record txn, TxnDigest digest) throws IOException {
         if (hdr == null) {
+            // TxnHeader为null，代表是读请求，直接返回
             return false;
         }
         if (hdr.getZxid() <= lastZxidSeen) {
@@ -278,32 +322,44 @@ public class FileTxnLog implements TxnLog, Closeable {
                 lastZxidSeen,
                 hdr.getType());
         } else {
+            // 更新最后看到的zxid
             lastZxidSeen = hdr.getZxid();
         }
         if (logStream == null) {
             LOG.info("Creating new log file: {}", Util.makeLogName(hdr.getZxid()));
 
+            // 创建log文件，文件名为【log.{16进制的zxid}】
             logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
             fos = new FileOutputStream(logFileWrite);
             logStream = new BufferedOutputStream(fos);
             oa = BinaryOutputArchive.getArchive(logStream);
+            // 创建文件头
             FileHeader fhdr = new FileHeader(TXNLOG_MAGIC, VERSION, dbId);
+            // 先序列化一个文件头
             fhdr.serialize(oa, "fileheader");
-            // Make sure that the magic number is written before padding.
+            // Make sure that the magic number is written before padding.  （译：确保在填充前已写完魔法数。）
+            // 写到文件中
             logStream.flush();
             filePadding.setCurrentSize(fos.getChannel().position());
+            // 放入待flush的队列中
             streamsToFlush.add(fos);
         }
+        // todo：不懂
         filePadding.padFile(fos.getChannel());
+        // 事务头、事务、数字签名转字节数组
         byte[] buf = Util.marshallTxnEntry(hdr, txn, digest);
         if (buf == null || buf.length == 0) {
             throw new IOException("Faulty serialization for header " + "and txn");
         }
+        // 搞一个checksum
         Checksum crc = makeChecksumAlgorithm();
         crc.update(buf, 0, buf.length);
+        // 写checksum
         oa.writeLong(crc.getValue(), "txnEntryCRC");
+        // 写事务，写结束符
         Util.writeTxnBytes(oa, buf);
 
+        /** 注意，这里只是写到流里，等待commit的时候再flush **/
         return true;
     }
 
@@ -384,16 +440,17 @@ public class FileTxnLog implements TxnLog, Closeable {
     }
 
     /**
-     * commit the logs. make sure that everything hits the
-     * disk
+     * commit the logs. make sure that everything hits the disk
+     * （译：提交日志。确保一切都击中磁盘）
      */
     public synchronized void commit() throws IOException {
         if (logStream != null) {
             logStream.flush();
         }
         for (FileOutputStream log : streamsToFlush) {
+            // flush到文件中
             log.flush();
-            if (forceSync) {
+            if (forceSync) {  // 默认true
                 long startSyncNS = System.nanoTime();
 
                 FileChannel channel = log.getChannel();
@@ -417,6 +474,7 @@ public class FileTxnLog implements TxnLog, Closeable {
             }
         }
         while (streamsToFlush.size() > 1) {
+            // 清除
             streamsToFlush.poll().close();
         }
 

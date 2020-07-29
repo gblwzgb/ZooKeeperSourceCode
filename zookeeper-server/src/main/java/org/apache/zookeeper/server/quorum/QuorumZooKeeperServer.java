@@ -59,6 +59,7 @@ public abstract class QuorumZooKeeperServer extends ZooKeeperServer {
         upgradeableSessionTracker.start();
     }
 
+    // todo：
     public Request checkUpgradeSession(Request request) throws IOException, KeeperException {
         // If this is a request for a local session and it is to
         // create an ephemeral node, then upgrade the session and return

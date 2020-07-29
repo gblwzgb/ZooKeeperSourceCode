@@ -375,6 +375,7 @@ public class ZKDatabase {
      *                  0 is unlimited, negative value means disable.
      * @return list of proposal (request part of each proposal is null)
      */
+    // todo
     public Iterator<Proposal> getProposalsFromTxnLog(long startZxid, long sizeLimit) {
         if (sizeLimit < 0) {
             LOG.debug("Negative size limit - retrieving proposal via txnlog is disabled");

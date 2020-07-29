@@ -48,17 +48,17 @@ import org.slf4j.LoggerFactory;
  * above the implementations
  * of txnlog and snapshot
  * classes
+ * （译：这是txnlog和快照类的实现之上的帮助器类）
  */
 public class FileTxnSnapLog {
 
-    //the directory containing the
-    //the transaction logs
+    //the directory containing the transaction logs  （译：包含事务日志的目录）
     final File dataDir;
-    //the directory containing the
-    //the snapshot directory
+    //the directory containing the snapshot directory  （译：包含快照的目录）
     final File snapDir;
     TxnLog txnLog;
     SnapShot snapLog;
+    // 自动创建DB，默认true
     private final boolean autoCreateDB;
     private final boolean trustEmptySnapshot;
     public static final int VERSION = 2;
@@ -117,14 +117,16 @@ public class FileTxnSnapLog {
 
         // by default create snap/log dirs, but otherwise complain instead
         // See ZOOKEEPER-1161 for more details
+        // 默认true
         boolean enableAutocreate = Boolean.parseBoolean(
             System.getProperty(ZOOKEEPER_DATADIR_AUTOCREATE, ZOOKEEPER_DATADIR_AUTOCREATE_DEFAULT));
 
         trustEmptySnapshot = Boolean.getBoolean(ZOOKEEPER_SNAPSHOT_TRUST_EMPTY);
         LOG.info("{} : {}", ZOOKEEPER_SNAPSHOT_TRUST_EMPTY, trustEmptySnapshot);
 
-        if (!this.dataDir.exists()) {
+        if (!this.dataDir.exists()) {  // 目录不存在
             if (!enableAutocreate) {
+                // 如果enableAutocreate人为配置为false，且目标不存在，则报错
                 throw new DatadirException(String.format(
                     "Missing data directory %s, automatic data directory creation is disabled (%s is false)."
                     + " Please create this directory manually.",
@@ -132,14 +134,18 @@ public class FileTxnSnapLog {
                     ZOOKEEPER_DATADIR_AUTOCREATE));
             }
 
+            // 创建目录
             if (!this.dataDir.mkdirs() && !this.dataDir.exists()) {
+                // 创建失败报错
                 throw new DatadirException("Unable to create data directory " + this.dataDir);
             }
         }
         if (!this.dataDir.canWrite()) {
+            // 目录不可写，报错
             throw new DatadirException("Cannot write to data directory " + this.dataDir);
         }
 
+        // 同上，创建快照目录
         if (!this.snapDir.exists()) {
             // by default create this directory, but otherwise complain instead
             // See ZOOKEEPER-1161 for more details
@@ -162,13 +168,18 @@ public class FileTxnSnapLog {
         // check content of transaction log and snapshot dirs if they are two different directories
         // See ZOOKEEPER-2967 for more details
         if (!this.dataDir.getPath().equals(this.snapDir.getPath())) {
+            // 检查log目录，内不能含有以'snapshot.'开头的文件
             checkLogDir();
+            // 检查snapshot目录，内不能含有以'log.'开头的文件
             checkSnapDir();
         }
 
+        // 创建FileTxnLog，用于访问、添加事务日志的
         txnLog = new FileTxnLog(this.dataDir);
+        // 创建FileSnap，用于存储、序列化、反序列化、查询快照信息
         snapLog = new FileSnap(this.snapDir);
 
+        // 默认true
         autoCreateDB = Boolean.parseBoolean(
             System.getProperty(ZOOKEEPER_DB_AUTOCREATE, ZOOKEEPER_DB_AUTOCREATE_DEFAULT));
     }
@@ -466,9 +477,11 @@ public class FileTxnSnapLog {
         ConcurrentHashMap<Long, Integer> sessionsWithTimeouts,
         boolean syncSnap) throws IOException {
         long lastZxid = dataTree.lastProcessedZxid;
+        // 创建文件名为【snapshot.{16进制的zxid}】，在snapshot的目录下
         File snapshotFile = new File(snapDir, Util.makeSnapshotName(lastZxid));
         LOG.info("Snapshotting: 0x{} to {}", Long.toHexString(lastZxid), snapshotFile);
         try {
+            // 写到单独的文件中
             snapLog.serialize(dataTree, sessionsWithTimeouts, snapshotFile, syncSnap);
         } catch (IOException e) {
             if (snapshotFile.length() == 0) {
@@ -477,7 +490,7 @@ public class FileTxnSnapLog {
                  * out to disk, and ends up creating an empty file instead.
                  * Doing so will eventually result in valid snapshots being
                  * removed during cleanup. */
-                if (snapshotFile.delete()) {
+                if (snapshotFile.delete()) {  // 写失败了，删文件
                     LOG.info("Deleted empty snapshot file: {}", snapshotFile.getAbsolutePath());
                 } else {
                     LOG.warn("Could not delete empty snapshot file: {}", snapshotFile.getAbsolutePath());

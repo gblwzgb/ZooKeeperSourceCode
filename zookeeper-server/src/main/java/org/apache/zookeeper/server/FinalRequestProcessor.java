@@ -85,6 +85,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 该请求处理器实际上应用与请求关联的任何事务并为任何查询提供服务。
+ * 它始终位于RequestProcessor链的末尾（因此具有名称），因此它没有nextProcessor成员。
+ *
+ * 这个RequestProcessor依靠ZooKeeperServer来填充ZooKeeperServer的outstandingRequests成员。
+ */
+
+/**
  * This Request processor actually applies any transaction associated with a
  * request and services any queries. It is always at the end of a
  * RequestProcessor chain (hence the name), so it does not have a nextProcessor

@@ -63,6 +63,7 @@ public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
 
     @Override
     protected void setupRequestProcessors() {
+        // 链为：LeaderRequestProcessor -> PrepRequestProcessor -> ProposalRequestProcessor -> CommitProcessor -> ToBeAppliedRequestProcessor -> FinalRequestProcessor
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         RequestProcessor toBeAppliedProcessor = new Leader.ToBeAppliedRequestProcessor(finalProcessor, getLeader());
         commitProcessor = new CommitProcessor(toBeAppliedProcessor, Long.toString(getServerId()), false, getZooKeeperServerListener());
@@ -201,7 +202,15 @@ public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
          *
          * This is done so that requests from learners won't go through
          * LeaderRequestProcessor which perform local session upgrade.
+         *
+         * 译：
+         * 来自learner的请求应该已经在每台已经执行了一些请求验证的服务器上通过submitRequest()，因此我们无需再次执行。
+         *
+         * 另外，LearnerHandler应该仅在leader的服务器启动时才开始将请求提交到leader的管道中，因此我们可以将请求直接提交到PrepRequestProcessor中。
+         *
+         * 这样做是为了避免来自learners的请求不会通过执行本地会话升级的LeaderRequestProcessor。
          */
+        // 直接绕过Leader的第一个处理器LeaderRequestProcessor
         prepRequestProcessor.processRequest(request);
     }
 

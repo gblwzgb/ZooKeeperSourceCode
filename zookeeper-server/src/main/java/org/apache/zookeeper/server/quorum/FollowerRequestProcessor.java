@@ -33,7 +33,11 @@ import org.slf4j.LoggerFactory;
 /**
  * This RequestProcessor forwards any requests that modify the state of the
  * system to the Leader.
+ *
+ * （译：该RequestProcessor将任何修改系统状态的请求转发给Leader。）
  */
+// 使用队列，将同步转异步
+    // 问：客户端收到成功的回应？
 public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements RequestProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(FollowerRequestProcessor.class);
@@ -56,22 +60,26 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
     public void run() {
         try {
             while (!finished) {
+                // 没请求的话会阻塞
                 Request request = queuedRequests.take();
                 if (LOG.isTraceEnabled()) {
                     ZooTrace.logRequest(LOG, ZooTrace.CLIENT_REQUEST_TRACE_MASK, 'F', request, "");
                 }
                 if (request == Request.requestOfDeath) {
+                    // 如果是dead的请求，就退出死循环
                     break;
                 }
 
                 // Screen quorum requests against ACLs first
                 if (!zks.authWriteRequest(request)) {
+                    // 没权限忽略
                     continue;
                 }
 
                 // We want to queue the request to be processed before we submit
                 // the request to the leader so that we are ready to receive
                 // the response
+                // （译：我们希望先将要处理的请求排队，然后再将请求提交给leader，以便我们准备接收响应）
                 nextProcessor.processRequest(request);
 
                 // We now ship the request to the leader. As with all
@@ -81,6 +89,7 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                 // add it to pendingSyncs.
                 switch (request.type) {
                 case OpCode.sync:
+                    // zkCli客户端发起的同步请求
                     zks.pendingSyncs.add(request);
                     zks.getFollower().request(request);
                     break;
@@ -95,11 +104,12 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                 case OpCode.setACL:
                 case OpCode.multi:
                 case OpCode.check:
+                    // 发一个Leader.REQUEST的数据包给Leader
                     zks.getFollower().request(request);
                     break;
                 case OpCode.createSession:
                 case OpCode.closeSession:
-                    // Don't forward local sessions to the leader.
+                    // Don't forward local sessions to the leader.  （译：不要将本地session转发给leader。）
                     if (!request.isLocalSession()) {
                         zks.getFollower().request(request);
                     }

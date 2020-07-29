@@ -83,6 +83,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此请求处理器通常在RequestProcessor更改开始时。
+ * 它设置与更改系统状态的请求关联的所有事务。
+ * 它依靠ZooKeeperServer来更新outstandingRequests，以便它可以考虑生成事务时要应用的队列中的事务。
+ */
+// 同步转异步了，请求会丢到submittedRequests列表中
+
+/**
  * This request processor is generally at the start of a RequestProcessor
  * change. It sets up any transactions associated with requests that change the
  * state of the system. It counts on ZooKeeperServer to update
@@ -120,6 +127,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         this.zks = zks;
         this.digestEnabled = ZooKeeperServer.isDigestEnabled();
         if (this.digestEnabled) {
+            // 默认true
             this.digestCalculator = new DigestCalculator();
         }
     }

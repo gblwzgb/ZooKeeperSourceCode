@@ -92,9 +92,11 @@ public class Util {
      * @return file name
      */
     public static String makeSnapshotName(long zxid) {
+        // 默认为【snapshot.{16进制的zxid}】
+        // 比如zxid为99999，则转成16进制为：1869f
         return FileSnap.SNAPSHOT_FILE_PREFIX + "."
                + Long.toHexString(zxid)
-               + SnapStream.getStreamMode().getFileExtension();
+               + SnapStream.getStreamMode().getFileExtension();  // 默认org.apache.zookeeper.server.persistence.SnapStream.StreamMode.CHECKED，为空字符串""
     }
 
     /**

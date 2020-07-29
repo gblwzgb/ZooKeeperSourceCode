@@ -458,6 +458,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     /**
      *  Restore sessions and data
+     *  （译：恢复会话和数据）
      */
     public void loadData() throws IOException, InterruptedException {
         /*
@@ -477,14 +478,27 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
          * ZooKeeperServer#startdata.
          *
          * See ZOOKEEPER-1642 for more detail.
+         *
+         * 译：
+         * 当新领导者开始执行Leader＃lead时，它将调用此方法。
+         * 但是，数据库已在运行领导者选举之前进行了初始化，以便服务器可以为其初始投票选择zxid。
+         * 它通过调用QuorumPeer＃getLastLoggedZxid来实现。
+         * 因此，我们不需要再次初始化它，并且避免了再次加载它的麻烦。
+         * 不重新加载对于托管大型数据库的应用程序尤为重要。
+         *
+         * 以下if块检查数据库是否已初始化。
+         * 请注意，此方法由至少一个其他方法调用：ZooKeeperServer＃startdata。
+         * 有关更多详细信息，请参见ZOOKEEPER-1642。
          */
         if (zkDb.isInitialized()) {
+            // 如果已经初始化过，则从内存中获取最后处理过的zxid
             setZxid(zkDb.getDataTreeLastProcessedZxid());
         } else {
+            // 如果没有初始化过，则从磁盘加载数据到内存，并返回zxid
             setZxid(zkDb.loadDataBase());
         }
 
-        // Clean up dead sessions
+        // Clean up dead sessions  （译：清理死的会话）
         List<Long> deadSessions = new ArrayList<>();
         for (Long session : zkDb.getSessions()) {
             if (zkDb.getSessionWithTimeOuts().get(session) == null) {
@@ -497,7 +511,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             killSession(session, zkDb.getDataTreeLastProcessedZxid());
         }
 
-        // Make a clean snapshot
+        // Make a clean snapshot  （译：制作干净的快照）
         takeSnapshot();
     }
 
@@ -508,6 +522,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     public void takeSnapshot(boolean syncSnap) {
         long start = Time.currentElapsedTime();
         try {
+            // 快照到文件中
             txnLogFactory.save(zkDb.getDataTree(), zkDb.getSessionWithTimeOuts(), syncSnap);
         } catch (IOException e) {
             LOG.error("Severe unrecoverable error, exiting", e);
@@ -661,8 +676,10 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             createSessionTracker();
         }
         startSessionTracker();
+        // 组装请求处理器的链
         setupRequestProcessors();
 
+        // 创建RequestThrottler并启动
         startRequestThrottler();
 
         registerJMX();
@@ -671,6 +688,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
         registerMetrics();
 
+        // 设置zkServer的状态为RUNNING，到这里为止，阻塞的客户端请求就可以继续了。
         setState(State.RUNNING);
 
         requestPathMetricsCollector.start();
@@ -1072,6 +1090,9 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                     // processor it should wait for setting up the request
                     // processor chain. The state will be updated to RUNNING
                     // after the setup.
+                    // （译：由于所有请求都传递给请求处理器，因此它应该等待建立请求处理器链。 设置后，状态将更新为“正在运行”。）
+
+                    // 服务器之间选举完成，数据同步完成后，会调用ZooKeeperServer#startup，这里就会跳出等待
                     while (state == State.INITIAL) {
                         wait(1000);
                     }
@@ -1088,12 +1109,14 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     public void submitRequestNow(Request si) {
         if (firstProcessor == null) {
+            // firstProcessor在zkServer#startup完成设置，服务器之间选举、数据同步完成后，会执行zkServer#startup
             synchronized (this) {
                 try {
                     // Since all requests are passed to the request
                     // processor it should wait for setting up the request
                     // processor chain. The state will be updated to RUNNING
                     // after the setup.
+                    // （译：由于所有请求都传递给请求处理器，因此它应该等待建立请求处理器链。 设置后，状态将更新为“正在运行”。）
                     while (state == State.INITIAL) {
                         wait(1000);
                     }
@@ -1107,10 +1130,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
         try {
             touch(si.cnxn);
+            // 校验type对不对
             boolean validpacket = Request.isValid(si.type);
             if (validpacket) {
                 setLocalSessionFlag(si);
-                // 是一个PrepRequestProcessor
+                // 如果是leader，则是LeaderRequestProcessor
+                // 如果是follower，则是FollowerRequestProcessor
                 firstProcessor.processRequest(si);
                 if (si.cnxn != null) {
                     incInProcess();
@@ -1387,8 +1412,8 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             sessionTimeout = maxSessionTimeout;
         }
         cnxn.setSessionTimeout(sessionTimeout);
-        // We don't want to receive any packets until we are sure that the
-        // session is setup
+        // We don't want to receive any packets until we are sure that the session is setup
+        // （译：在确定会话已建立之前，我们不希望接收任何数据包）
         cnxn.disableRecv();
         if (sessionId == 0) {
             long id = createSession(cnxn, passwd, sessionTimeout);
@@ -1710,14 +1735,15 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
         // return fast w/o synchronization when we get a read
         if (!writeRequest && !quorumRequest) {
+            // 非写请求、且集群请求，直接返回一个空的
             return new ProcessTxnResult();
         }
         synchronized (outstandingChanges) {
             // 在DB中处理事务
             ProcessTxnResult rc = processTxnInDB(hdr, request.getTxn(), request.getTxnDigest());
 
-            // request.hdr is set for write requests, which are the only ones
-            // that add to outstandingChanges.
+            // request.hdr is set for write requests, which are the only ones that add to outstandingChanges.
+            // （译：request.hdr为写请求设置的，这是唯一添加到outstandingChanges的请求。）
             if (writeRequest) {
                 long zxid = hdr.getZxid();
                 while (!outstandingChanges.isEmpty()
@@ -1736,8 +1762,9 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                 }
             }
 
-            // do not add non quorum packets to the queue.
+            // do not add non quorum packets to the queue.  （不要将非quorum数据包添加到队列中。）
             if (quorumRequest) {
+                // 加到已commit的提议队列中
                 getZKDatabase().addCommittedProposal(request);
             }
             return rc;
@@ -1762,8 +1789,10 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     private ProcessTxnResult processTxnInDB(TxnHeader hdr, Record txn, TxnDigest digest) {
         if (hdr == null) {
+            // hdr为空，代表读请求，直接返回空对象
             return new ProcessTxnResult();
         } else {
+            // 处理事务
             return getZKDatabase().processTxn(hdr, txn, digest);
         }
     }

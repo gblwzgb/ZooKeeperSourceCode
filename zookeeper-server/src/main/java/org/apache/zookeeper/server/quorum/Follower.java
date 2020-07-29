@@ -41,6 +41,7 @@ import org.apache.zookeeper.txn.TxnHeader;
  */
 public class Follower extends Learner {
 
+    // 最后排队的zxid
     private long lastQueued;
     // This is the same object as this.zk, but we cache the downcast op
     final FollowerZooKeeperServer fzk;
@@ -70,28 +71,35 @@ public class Follower extends Learner {
     void followLeader() throws InterruptedException {
         self.end_fle = Time.currentElapsedTime();
         long electionTimeTaken = self.end_fle - self.start_fle;
+        // 记录选举所花费的时间
         self.setElectionTimeTaken(electionTimeTaken);
+        // 加到统计指标里
         ServerMetrics.getMetrics().ELECTION_TIME.add(electionTimeTaken);
         LOG.info("FOLLOWING - LEADER ELECTION TOOK - {} {}", electionTimeTaken, QuorumPeer.FLE_TIME_UNIT);
+        // 清零
         self.start_fle = 0;
         self.end_fle = 0;
         fzk.registerJMX(new FollowerBean(this, zk), self.jmxLocalPeerBean);
 
         long connectionTime = 0;
+        // 是否完成同步
         boolean completedSync = false;
 
         try {
+            // 设置ZAB协议的状态为DISCOVERY
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
+            // 获取Leader的QuorumServer
             QuorumServer leaderServer = findLeader();
             try {
+                // 连接到Leader
                 connectToLeader(leaderServer.addr, leaderServer.hostname);
                 connectionTime = System.currentTimeMillis();
                 long newEpochZxid = registerWithLeader(Leader.FOLLOWERINFO);
                 if (self.isReconfigStateChange()) {
                     throw new Exception("learned about role change");
                 }
-                //check to see if the leader zxid is lower than ours
-                //this should never happen but is just a safety check
+                //check to see if the leader zxid is lower than ours this should never happen but is just a safety check
+                // （译：检查领导者zxid是否低于我们的领导者，这永远不会发生，而只是安全检查）
                 long newEpoch = ZxidUtils.getEpochFromZxid(newEpochZxid);
                 if (newEpoch < self.getAcceptedEpoch()) {
                     LOG.error("Proposed leader epoch "
@@ -103,15 +111,20 @@ public class Follower extends Learner {
                 long startTime = Time.currentElapsedTime();
                 try {
                     self.setLeaderAddressAndId(leaderServer.addr, leaderServer.getId());
+                    // 设置ZAB协议的状态为SYNCHRONIZATION（同步）
                     self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
+                    /** 同步数据 */
                     syncWithLeader(newEpochZxid);
+                    // 设置ZAB协议的状态为BROADCAST（广播）
                     self.setZabState(QuorumPeer.ZabState.BROADCAST);
+                    // 同步完成标志
                     completedSync = true;
                 } finally {
+                    // 记录同步花费的时间
                     long syncTime = Time.currentElapsedTime() - startTime;
                     ServerMetrics.getMetrics().FOLLOWER_SYNC_TIME.add(syncTime);
                 }
-                if (self.getObserverMasterPort() > 0) {
+                if (self.getObserverMasterPort() > 0) {  // config里配置的
                     LOG.info("Starting ObserverMaster");
 
                     om = new ObserverMaster(self, fzk, self.getObserverMasterPort());
@@ -119,10 +132,11 @@ public class Follower extends Learner {
                 } else {
                     om = null;
                 }
-                // create a reusable packet to reduce gc impact
+                // create a reusable packet to reduce gc impact  （译：创建可重用的数据包以减少gc的影响）
                 QuorumPacket qp = new QuorumPacket();
                 while (this.isRunning()) {
                     readPacket(qp);
+                    // 处理数据包
                     processPacket(qp);
                 }
             } catch (Exception e) {
@@ -133,12 +147,14 @@ public class Follower extends Learner {
                 pendingRevalidations.clear();
             }
         } finally {
+            // 退出死循环了，做一些清理工作
             if (om != null) {
                 om.stop();
             }
             zk.unregisterJMX(this);
 
             if (connectionTime != 0) {
+                // 记录连接持续时间
                 long connectionDuration = System.currentTimeMillis() - connectionTime;
                 LOG.info(
                     "Disconnected from leader (with address: {}). Was connected for {}ms. Sync state: {}",
@@ -158,10 +174,12 @@ public class Follower extends Learner {
     protected void processPacket(QuorumPacket qp) throws Exception {
         switch (qp.getType()) {
         case Leader.PING:
+            // 这个是什么包？Leader又不会发这个...
             ping(qp);
             break;
         case Leader.PROPOSAL:
             ServerMetrics.getMetrics().LEARNER_PROPOSAL_RECEIVED_COUNT.add(1);
+            // 解析事务log
             TxnLogEntry logEntry = SerializeUtils.deserializeTxn(qp.getData());
             TxnHeader hdr = logEntry.getHeader();
             Record txn = logEntry.getTxn();
@@ -172,16 +190,19 @@ public class Follower extends Learner {
                     Long.toHexString(hdr.getZxid()),
                     Long.toHexString(lastQueued + 1));
             }
+            // 设置最后排队的zxid
             lastQueued = hdr.getZxid();
 
             if (hdr.getType() == OpCode.reconfig) {
+                // todo：这块应该是动态扩容、下线服务器用的
                 SetDataTxn setDataTxn = (SetDataTxn) txn;
                 QuorumVerifier qv = self.configFromString(new String(setDataTxn.getData()));
                 self.setLastSeenQuorumVerifier(qv, true);
             }
 
+            // 记录请求，交给SyncRequestProcessor处理（内部将事务落盘，然后发ack给leader）
             fzk.logRequest(hdr, txn, digest);
-            if (hdr != null) {
+            if (hdr != null) {  // 记录一些指标用
                 /*
                  * Request header is created only by the leader, so this is only set
                  * for quorum packets. If there is a clock drift, the latency may be
@@ -193,7 +214,7 @@ public class Follower extends Learner {
                     ServerMetrics.getMetrics().PROPOSAL_LATENCY.add(latency);
                 }
             }
-            if (om != null) {
+            if (om != null) {  // 默认null
                 final long startTime = Time.currentElapsedTime();
                 om.proposalReceived(qp);
                 ServerMetrics.getMetrics().OM_PROPOSAL_PROCESS_TIME.add(Time.currentElapsedTime() - startTime);
@@ -201,8 +222,9 @@ public class Follower extends Learner {
             break;
         case Leader.COMMIT:
             ServerMetrics.getMetrics().LEARNER_COMMIT_RECEIVED_COUNT.add(1);
+            // 提交至commitProcessor异步处理
             fzk.commit(qp.getZxid());
-            if (om != null) {
+            if (om != null) {  // 默认null
                 final long startTime = Time.currentElapsedTime();
                 om.proposalCommitted(qp.getZxid());
                 ServerMetrics.getMetrics().OM_COMMIT_PROCESS_TIME.add(Time.currentElapsedTime() - startTime);

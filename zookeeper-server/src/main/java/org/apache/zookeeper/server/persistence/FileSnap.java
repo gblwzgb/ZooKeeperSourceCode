@@ -48,6 +48,7 @@ import org.slf4j.LoggerFactory;
 public class FileSnap implements SnapShot {
 
     File snapDir;
+    // 封装最后快照的信息，包含（最后快照的zxid，最后修改的时间戳）
     SnapshotInfo lastSnapshotInfo = null;
     private volatile boolean close = false;
     private static final int VERSION = 2;
@@ -246,8 +247,11 @@ public class FileSnap implements SnapShot {
         if (!close) {
             try (CheckedOutputStream snapOS = SnapStream.getOutputStream(snapShot, fsync)) {
                 OutputArchive oa = BinaryOutputArchive.getArchive(snapOS);
+                // 文件头，都是写死的值。（ByteBuffer.wrap("ZKSN".getBytes()).getInt()， 2， -1）
                 FileHeader header = new FileHeader(SNAP_MAGIC, VERSION, dbId);
+                // 序列化，序列化顺序为：header、sessions数量、遍历序列化（sessionId，timeout），datatree
                 serialize(dt, sessions, oa, header);
+                // 密封流，写入一个Checksum，写入一个'/'符
                 SnapStream.sealStream(snapOS, oa);
 
                 // Digest feature was added after the CRC to make it backward
@@ -257,9 +261,12 @@ public class FileSnap implements SnapShot {
                 // To check the intact, after adding digest we added another
                 // CRC check.
                 if (dt.serializeZxidDigest(oa)) {
+                    // 暂时不懂
                     SnapStream.sealStream(snapOS, oa);
                 }
+                // todo：没看到flush呀
 
+                // 封装最后快照的信息，包含（最后快照的zxid，最后修改的时间戳）
                 lastSnapshotInfo = new SnapshotInfo(
                     Util.getZxidFromName(snapShot.getName(), SNAPSHOT_FILE_PREFIX),
                     snapShot.lastModified() / 1000);

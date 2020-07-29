@@ -143,8 +143,13 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
     public static final class AddressTuple {
 
+        // 通信地址
         public final MultipleAddresses quorumAddr;
+
+        // 选举地址
         public final MultipleAddresses electionAddr;
+
+        // 客户端地址？
         public final InetSocketAddress clientAddr;
 
         public AddressTuple(MultipleAddresses quorumAddr, MultipleAddresses electionAddr, InetSocketAddress clientAddr) {
@@ -204,11 +209,13 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
 
     public static class QuorumServer {
-
+        // 通信地址
         public MultipleAddresses addr = new MultipleAddresses();
 
+        // 选举地址
         public MultipleAddresses electionAddr = new MultipleAddresses();
 
+        // 客户端地址？
         public InetSocketAddress clientAddr = null;
 
         public long id;
@@ -508,8 +515,9 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     /**
      * (Used for monitoring) When peer is in synchronization phase, this shows
      * which synchronization mechanism is being used
+     * （译：（用于监视）当对等方处于同步阶段时，这表明正在使用哪种同步机制）
      */
-    public enum SyncMode {
+    public enum SyncMode {  // 同步模式
         NONE,
         DIFF,
         SNAP,
@@ -1481,7 +1489,9 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                 case FOLLOWING:
                     try {
                         LOG.info("FOLLOWING");
+                        // 创建一个Follower，内部是FollowerZooKeeperServer
                         setFollower(makeFollower(logFactory));
+                        // 跟随领导者
                         follower.followLeader();
                     } catch (Exception e) {
                         LOG.warn("Unexpected exception", e);
@@ -1494,6 +1504,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                 case LEADING:
                     LOG.info("LEADING");
                     try {
+                        // 创建一个Leader，内部是LeaderZooKeeperServer
                         setLeader(makeLeader(logFactory));
                         leader.lead();
                         setLeader(null);
@@ -1921,6 +1932,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             }
             QuorumServer qs = qv.getAllMembers().get(getId());
             if (qs != null) {
+                // 设置自己的各种地址
                 setAddrs(qs.addr, qs.electionAddr, qs.clientAddr);
             }
             updateObserverMasterList();

@@ -25,6 +25,7 @@ import org.apache.zookeeper.txn.TxnHeader;
 /**
  * A helper class to represent the txn entry.
  */
+// 事务日志实体，包含：事务、事务头、事务数字签名
 public final class TxnLogEntry {
     private final Record txn;
     private final TxnHeader header;

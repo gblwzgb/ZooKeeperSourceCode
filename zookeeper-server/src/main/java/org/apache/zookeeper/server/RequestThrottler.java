@@ -25,6 +25,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 启用后，RequestThrottler会限制当前提交给请求处理器管道的未完成请求的数量。
+ * 节流阀增加了由连接层（NIOServerCnxn，NettyServerCnxn）强制执行的globalOutstandingLimit施加的限制。
+ *
+ * 一旦达到请求限制，连接层限制将通过在连接上禁用选择来对TCP连接施加反压。
+ * 但是，连接层始终允许连接在禁用对该连接的选择之前发送至少一个请求。
+ * 因此，在具有40000个客户端连接的方案中，即使将globalOustandingLimit设置得较低，正在进行的请求总数也可能高达40000。
+ *
+ * RequestThrottler通过添加其他队列来解决此问题。启用后，客户端连接不再将请求直接提交到请求处理器管道，而是提交给RequestThrottler。
+ * 然后，RequestThrottler负责向请求处理器发出请求，并强制执行单独的maxRequests限制。
+ * 如果未完成的请求总数大于maxRequests，则调节器将连续停顿stallTime毫秒直到达到限制。
+ *
+ * RequestThrottler还可以选择丢弃过时的请求，而不是将其提交到处理器管道。
+ * 陈旧的请求是由已经关闭的连接发送的请求，和/或等待时间最终将高于其关联会话超时的请求。
+ * 陈旧性的概念是可配置的，有关详细信息，请参阅请求。
+ *
+ * 为确保顺序保证，如果从连接中删除了请求，则该连接将关闭并标记为无效。然后，该连接中所有正在进行的后续请求也将被丢弃。
+ */
+
+/**
  * When enabled, the RequestThrottler limits the number of outstanding requests
  * currently submitted to the request processor pipeline. The throttler augments
  * the limit imposed by the <code>globalOutstandingLimit</code> that is enforced
