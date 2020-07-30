@@ -36,6 +36,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 服务端在FinalRequestProcessor发现是setWatch操作码后，会从request里解析watcher，然后放在这里。
+ * 当有变更的时候，会通过这个WatchManager，给监听方发消息。
+ */
+
+/**
  * This class manages watches. It allows watches to be associated with a string
  * and removes watchers and their watches in addition to managing triggers.
  */

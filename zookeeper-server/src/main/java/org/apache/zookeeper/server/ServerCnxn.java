@@ -48,7 +48,10 @@ import org.apache.zookeeper.proto.ReplyHeader;
 import org.apache.zookeeper.proto.RequestHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+/*
+ * 作用：服务端连接，代表一个客户端到服务端的连接
+ *
+ */
 /**
  * Interface to a Server connection - represents a connection from a client
  * to the server.
@@ -79,6 +82,7 @@ public abstract class ServerCnxn implements Stats, Watcher {
      */
     final ZooKeeperServer zkServer;
 
+    // 断线的一些原因枚举
     public enum DisconnectReason {
         UNKNOWN("unknown"),
         SERVER_SHUTDOWN("server_shutdown"),

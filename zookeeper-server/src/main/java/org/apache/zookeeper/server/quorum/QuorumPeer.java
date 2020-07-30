@@ -84,6 +84,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 此类管理quorum协议。 该服务器可以处于三种状态：
+ *
+ * 1、Leader选举 - 每个服务器将选举一个leader（最初将自己提议为leader）。
+ *
+ * 2、Follower - 服务器将与leader同步并复制任何事务。
+ *
+ * 3、Leader - 服务器将处理请求并将其转发给followers。 大多数followers必须先记录请求，然后才能接受该请求。
+ *
+ * 此类将设置一个datagram套接字，该套接字将始终以其当前leader的视图作为响应。 响应将采取以下形式：
+ *    int xid;
+ *
+ *    long myid;
+ *
+ *    long leader_id;
+ *
+ *    long leader_zxid;
+ *
+ * 当前leader的请求将仅包含一个xid：int xid;
+ */
+
+/**
  * This class manages the quorum protocol. There are three states this server
  * can be in:
  * <ol>

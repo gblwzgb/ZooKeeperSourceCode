@@ -42,6 +42,7 @@ import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
  * CommitProcessor -&gt; Leader.ToBeAppliedRequestProcessor -&gt;
  * FinalRequestProcessor
  */
+// 和标准的ZooKeeperServer一样，只是重写了一下setupRequestProcessors，替换了请求链
 public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
 
     private ContainerManager containerManager;  // guarded by sync

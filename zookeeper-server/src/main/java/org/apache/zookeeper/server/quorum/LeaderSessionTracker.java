@@ -131,7 +131,7 @@ public class LeaderSessionTracker extends UpgradeableSessionTracker {
     }
 
     public long createSession(int sessionTimeout) {
-        if (localSessionsEnabled) {
+        if (localSessionsEnabled) {  // 默认false
             return localSessionTracker.createSession(sessionTimeout);
         }
         return globalSessionTracker.createSession(sessionTimeout);

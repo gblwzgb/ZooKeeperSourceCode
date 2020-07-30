@@ -188,7 +188,9 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
     }
 
     private void updateSessionExpiry(SessionImpl s, int timeout) {
+        // 打日志
         logTraceTouchSession(s.sessionId, timeout, "");
+        // 加入过期队列
         sessionExpiryQueue.update(s, timeout);
     }
 
@@ -253,7 +255,9 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
     }
 
     public long createSession(int sessionTimeout) {
+        // 新分配一个sessionId
         long sessionId = nextSessionId.getAndIncrement();
+        // 追踪session的状态
         trackSession(sessionId, sessionTimeout);
         return sessionId;
     }
@@ -264,16 +268,20 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
 
         SessionImpl session = sessionsById.get(id);
         if (session == null) {
+            // 创建一个SessionImpl
             session = new SessionImpl(id, sessionTimeout);
         }
 
         // findbugs2.0.3 complains about get after put.
         // long term strategy would be use computeIfAbsent after JDK 1.8
+        // 加到缓存中
         SessionImpl existedSession = sessionsById.putIfAbsent(id, session);
 
         if (existedSession != null) {
+            // 优先取已经存在的session
             session = existedSession;
         } else {
+            // 新添加的
             added = true;
             LOG.debug("Adding session 0x{}", Long.toHexString(id));
         }
@@ -287,6 +295,7 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
                 + " session 0x" + Long.toHexString(id) + " " + sessionTimeout);
         }
 
+        // 加入到ExpiryQueue中
         updateSessionExpiry(session, sessionTimeout);
         return added;
     }

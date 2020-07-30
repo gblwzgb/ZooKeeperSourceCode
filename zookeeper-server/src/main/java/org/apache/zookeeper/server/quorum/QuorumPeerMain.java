@@ -41,6 +41,28 @@ import org.apache.zookeeper.server.util.JvmPauseMonitor;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+/**
+ * 配置文件
+ *
+ * 当使用此类的main（）方法启动程序时，第一个参数用作配置文件的路径，该文件将用于获取配置信息。
+ * 该文件是Properties文件，因此键和值之间用等号（=）分隔，而键/值对之间用换行符分隔。
+ * 以下是配置文件中使用的键的一般摘要。有关此内容的完整详细信息，请参阅docs/index.html中的文档
+ *
+ * dataDir - ZooKeeper数据的存储目录。
+ * dataLogDir - ZooKeeper事务日志的存储目录。
+ * clientPort - 用于与客户端通信的端口。
+ * tickTime - 滴答的持续时间（以毫秒为单位）。这是ZooKeeper中的基本时间单位。
+ * initLimit - follower最初与leader同步所等待的最大滴答数。
+ * syncLimit - follower将等待leader发出的消息（包括心跳）的最大滴答声数量。
+ * server.id - 这是具有给定ID的服务器将用于仲裁协议的host：port [：port]。
+ * 除了配置文件。dataDir中有一个名为"myid"的文件，其中包含作为服务器id的ASCII十进制值。
+ */
+/* 核心作用
+ * 1、作为集群部署启动的入口，提供main方法
+ * 2、根据main的入参（配置文件路径），获取配置文件并解析到QuorumPeerConfig中
+ * 3、创建QuorumPeer，为其初始化各种参数QuorumPeer，然后启动它，并join在QuorumPeer上，让main线程挂起。
+ *      （如果main没传入参，则降级成单机部署模式ZooKeeperServerMain.main）
+ */
 
 /**
  *
@@ -135,8 +157,9 @@ public class QuorumPeerMain {
         DatadirCleanupManager purgeMgr = new DatadirCleanupManager(
             config.getDataDir(),
             config.getDataLogDir(),
-            config.getSnapRetainCount(),
-            config.getPurgeInterval());
+            config.getSnapRetainCount(),  // 默认3个
+            config.getPurgeInterval());  // 默认0
+        // 因为默认PurgeInterval为0，代表不清楚，所以这里会被忽略
         purgeMgr.start();
 
         if (args.length == 1 && config.isDistributed()) {

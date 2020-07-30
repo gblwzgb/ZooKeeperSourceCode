@@ -62,6 +62,11 @@ public class PurgeTxnLog {
     private static final String PREFIX_LOG = "log";
 
     /**
+     * 清除快照和日志，并保留最后num个快照和相应的日志。
+     * 如果日志正在滚动或在此过程中创建了新快照，
+     * 则这些最新的N个快照或任何数据日志将从当前清除周期中排除。
+     */
+    /**
      * Purges the snapshot and logs keeping the last num snapshots and the
      * corresponding logs. If logs are rolling or a new snapshot is created
      * during this process, these newest N snapshots or any data logs will be
@@ -116,6 +121,7 @@ public class PurgeTxnLog {
          * Finds all candidates for deletion, which are files with a zxid in their name that is less
          * than leastZxidToBeRetain.  There's an exception to this rule, as noted above.
          */
+        // fixme：这个操作很骚，可以学习一下
         class MyFileFilter implements FileFilter {
 
             private final String prefix;
@@ -148,6 +154,7 @@ public class PurgeTxnLog {
         }
 
         // remove the old files
+        // 删除文件
         for (File f : files) {
             final String msg = String.format(
                 "Removing file: %s\t%s",

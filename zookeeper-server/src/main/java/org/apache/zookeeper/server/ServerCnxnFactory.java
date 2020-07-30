@@ -37,6 +37,10 @@ import org.apache.zookeeper.server.auth.SaslServerCallbackHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+ * 职责：
+ * 1、负责创建具体的ServerCnxnFactory实现类，默认NIO
+ */
 public abstract class ServerCnxnFactory {
 
     public static final String ZOOKEEPER_SERVER_CNXN_FACTORY = "zookeeper.serverCnxnFactory";
@@ -57,6 +61,7 @@ public abstract class ServerCnxnFactory {
     protected int maxCnxns;
 
     // sessionMap is used by closeSession()
+    // <sessionId, ServerCnxn>，closeSession() 时用
     final ConcurrentHashMap<Long, ServerCnxn> sessionMap = new ConcurrentHashMap<Long, ServerCnxn>();
 
     private static String loginUser = Login.SYSTEM_USER;

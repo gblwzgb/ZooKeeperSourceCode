@@ -118,6 +118,7 @@ public class ClientCnxn {
 
     /* predefined xid's values recognized as special by the server */
     // -1 means notification(WATCHER_EVENT)
+    // -1 表示通知（WATCHER_EVENT）
     public static final int NOTIFICATION_XID = -1;
     // -2 is the xid for pings
     public static final int PING_XID = -2;
@@ -868,45 +869,49 @@ public class ClientCnxn {
 
             replyHdr.deserialize(bbia, "header");
             switch (replyHdr.getXid()) {
-            case PING_XID:
-                LOG.debug("Got ping response for session id: 0x{} after {}ms.",
-                    Long.toHexString(sessionId),
-                    ((System.nanoTime() - lastPingSentNs) / 1000000));
-                return;
-              case AUTHPACKET_XID:
-                LOG.debug("Got auth session id: 0x{}", Long.toHexString(sessionId));
-                if (replyHdr.getErr() == KeeperException.Code.AUTHFAILED.intValue()) {
-                    state = States.AUTH_FAILED;
-                    eventThread.queueEvent(new WatchedEvent(Watcher.Event.EventType.None,
-                        Watcher.Event.KeeperState.AuthFailed, null));
-                    eventThread.queueEventOfDeath();
-                }
-              return;
-            case NOTIFICATION_XID:
-                LOG.debug("Got notification session id: 0x{}",
-                    Long.toHexString(sessionId));
-                WatcherEvent event = new WatcherEvent();
-                event.deserialize(bbia, "response");
+                case PING_XID:
+                    LOG.debug("Got ping response for session id: 0x{} after {}ms.",
+                        Long.toHexString(sessionId),
+                        ((System.nanoTime() - lastPingSentNs) / 1000000));
+                    return;
+                case AUTHPACKET_XID:
+                    LOG.debug("Got auth session id: 0x{}", Long.toHexString(sessionId));
+                    if (replyHdr.getErr() == KeeperException.Code.AUTHFAILED.intValue()) {
+                        state = States.AUTH_FAILED;
+                        eventThread.queueEvent(new WatchedEvent(Watcher.Event.EventType.None,
+                            Watcher.Event.KeeperState.AuthFailed, null));
+                        eventThread.queueEventOfDeath();
+                    }
+                  return;
+                case NOTIFICATION_XID:
+                    LOG.debug("Got notification session id: 0x{}",
+                        Long.toHexString(sessionId));
+                    // 收到通知了，解析成WatcherEvent
+                    WatcherEvent event = new WatcherEvent();
+                    event.deserialize(bbia, "response");
 
-                // convert from a server path to a client path
-                if (chrootPath != null) {
-                    String serverPath = event.getPath();
-                    if (serverPath.compareTo(chrootPath) == 0) {
-                        event.setPath("/");
-                    } else if (serverPath.length() > chrootPath.length()) {
-                        event.setPath(serverPath.substring(chrootPath.length()));
-                     } else {
-                         LOG.warn("Got server path {} which is too short for chroot path {}.",
-                             event.getPath(), chrootPath);
-                     }
-                }
+                    // convert from a server path to a client path  （译：从服务器路径转换为客户端路径）
+                    if (chrootPath != null) {
+                        String serverPath = event.getPath();
+                        if (serverPath.compareTo(chrootPath) == 0) {
+                            event.setPath("/");
+                        } else if (serverPath.length() > chrootPath.length()) {
+                            event.setPath(serverPath.substring(chrootPath.length()));
+                         } else {
+                             LOG.warn("Got server path {} which is too short for chroot path {}.",
+                                 event.getPath(), chrootPath);
+                         }
+                    }
 
-                WatchedEvent we = new WatchedEvent(event);
-                LOG.debug("Got {} for session id 0x{}", we, Long.toHexString(sessionId));
-                eventThread.queueEvent(we);
-                return;
-            default:
-                break;
+                    // 包装成WatchedEvent
+                    WatchedEvent we = new WatchedEvent(event);
+                    LOG.debug("Got {} for session id 0x{}", we, Long.toHexString(sessionId));
+                    // 排队，等待事件被处理
+                    eventThread.queueEvent(we);
+                    return;
+                default:
+                    // 其他的都是cxid，如create、delete等
+                    break;
             }
 
             // If SASL authentication is currently in progress, construct and

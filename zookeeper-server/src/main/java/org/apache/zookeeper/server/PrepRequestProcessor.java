@@ -155,10 +155,12 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
                     ZooTrace.logRequest(LOG, traceMask, 'P', request, "");
                 }
                 if (Request.requestOfDeath == request) {
+                    // 收到关闭的请求
                     break;
                 }
 
                 request.prepStartTime = Time.currentElapsedTime();
+                // 前面都不是重点，这里才是主菜
                 pRequest(request);
             }
         } catch (Exception e) {
@@ -324,6 +326,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
      */
     protected void pRequest2Txn(int type, long zxid, Request request, Record record, boolean deserialize) throws KeeperException, IOException, RequestProcessorException {
         if (request.getHdr() == null) {
+            // 给request设置一个事务头
             request.setHdr(new TxnHeader(request.sessionId, request.cxid, zxid,
                     Time.currentWallTime(), type));
         }
@@ -655,6 +658,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
 
     private void pRequest2TxnCreate(int type, Request request, Record record, boolean deserialize) throws IOException, KeeperException {
         if (deserialize) {
+            // 解析Request中的ByteBuffer到实现了Recode的'Request'中（CreateRequest）
             ByteBufferInputStream.byteBuffer2Record(request.request, record);
         }
 
@@ -678,6 +682,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             data = createRequest.getData();
             ttl = -1;
         }
+        // 创建模式：是临时节点、持久化的节点等等
         CreateMode createMode = CreateMode.fromFlag(flags);
         validateCreateRequest(path, createMode, request, ttl);
         String parentPath = validatePathForCreate(path, request.sessionId);
@@ -893,6 +898,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
                 break;
 
             //All the rest don't need to create a Txn - just verify session
+            // （译：其余所有不需要创建事务-只需验证会话）
             case OpCode.sync:
             case OpCode.exists:
             case OpCode.getData:

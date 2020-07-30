@@ -36,6 +36,7 @@ public abstract class UpgradeableSessionTracker implements SessionTracker {
     private ConcurrentMap<Long, Integer> localSessionsWithTimeouts;
     private ConcurrentMap<Long, Integer> upgradingSessions;
     protected LocalSessionTracker localSessionTracker;
+    // 默认false
     protected boolean localSessionsEnabled;
 
     public void start() {

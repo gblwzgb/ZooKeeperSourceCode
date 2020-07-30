@@ -41,6 +41,22 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+ * 核心职责：
+ * 1、配置一些信息
+ * 2、创建启动一个AcceptThread，用于接收客户端的connect请求，并分发给SelectorThread
+ * 3、创建启动一组SelectorThread，用来select后续的客户端读、写请求
+ * 4、创建一个WorkerService线程池，SelectorThread收到请求后，封装成IOWorkRequest，丢入该线程池处理
+ * 5、创建并启动ConnectionExpirerThread，用于清理过期的连接
+ * 6、创建NIOServerCnxn（这个发生在SelectorThread中，SelectorThread拿到AcceptThread的分发的socket后，会封装成NIOServerCnxn）
+ *
+ * 内部线程类：
+ * 1、AcceptThread
+ * 2、SelectorThread
+ * 3、IOWorkRequest
+ * 4、ConnectionExpirerThread
+ */
+
 /**
  * NIOServerCnxnFactory implements a multi-threaded ServerCnxnFactory using
  * NIO non-blocking socket calls. Communication between threads is handled via
@@ -863,6 +879,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
      * Add or update cnxn in our cnxnExpiryQueue
      * @param cnxn
      */
+    // // 更新这个连接的过期时间
     public void touchCnxn(NIOServerCnxn cnxn) {
         cnxnExpiryQueue.update(cnxn, cnxn.getSessionTimeout());
     }
@@ -891,6 +908,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         set.add(cnxn);
 
         cnxns.add(cnxn);
+        // 更新这个连接的过期时间
         touchCnxn(cnxn);
     }
 

@@ -84,6 +84,14 @@ import org.apache.zookeeper.txn.TxnHeader;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+/*
+ * 核心方法：
+ * 1、processPacket：NIOServerCnxn传入ByteBuffer，反序列化并封装成Request，丢入RequestThrottler#submittedRequests排队。
+ * 2、startup：启动session追踪器、组装RequestProcessor链、创建RequestThrottler并启动
+ * 3、processConnectRequest：创建会话
+ * 4、loadData、takeSnapshot、processTxn等一些对DB的操作
+ *
+ */
 
 /**
  * This class implements a simple standalone ZooKeeperServer. It sets up the
@@ -161,6 +169,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     protected int maxSessionTimeout = -1;
     /** Socket listen backlog. Value of -1 indicates unset */
     protected int listenBacklog = -1;
+    // LeaderSessionTracker、LearnerSessionTracker
     protected SessionTracker sessionTracker;
     private FileTxnSnapLog txnLogFactory = null;
     private ZKDatabase zkDb;
@@ -675,7 +684,9 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         if (sessionTracker == null) {
             createSessionTracker();
         }
+        // 启动session追踪器
         startSessionTracker();
+
         // 组装请求处理器的链
         setupRequestProcessors();
 
@@ -906,8 +917,8 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
 
     /**
-     * This structure is used to facilitate information sharing between PrepRP
-     * and FinalRP.
+     * This structure is used to facilitate information sharing between PrepRP and FinalRP.
+     * （译：此结构用于促进PrepRP和FinalRP之间的信息共享。）
      */
     static class ChangeRecord {
         PrecalculatedDigest precalculatedDigest;
@@ -961,11 +972,13 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             // Possible since it's just deserialized from a packet on the wire.
             passwd = new byte[0];
         }
+        // 这里是LeaderSessionTracker或LearnerSessionTracker，sessionId生成规则很简单，就是一直+1
         long sessionId = sessionTracker.createSession(timeout);
         Random r = new Random(sessionId ^ superSecret);
         r.nextBytes(passwd);
         ByteBuffer to = ByteBuffer.allocate(4);
         to.putInt(timeout);
+        // 给NIOServerCnxn设置sessionId
         cnxn.setSessionId(sessionId);
         Request si = new Request(cnxn, sessionId, 0, OpCode.createSession, to, null);
         submitRequest(si);
@@ -1416,6 +1429,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // （译：在确定会话已建立之前，我们不希望接收任何数据包）
         cnxn.disableRecv();
         if (sessionId == 0) {
+            // 创建一个sessionId
             long id = createSession(cnxn, passwd, sessionTimeout);
             LOG.debug(
                 "Client attempting to establish new session: session = 0x{}, zxid = 0x{}, timeout = {}, address = {}",
@@ -1629,6 +1643,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                 cnxn.sendCloseSession();
                 cnxn.disableRecv();
             } else {
+                // 封装一个Request
                 Request si = new Request(cnxn, cnxn.getSessionId(), h.getXid(), h.getType(), incomingBuffer, cnxn.getAuthInfo());
                 int length = incomingBuffer.limit();
                 if (isLargeRequest(length)) {

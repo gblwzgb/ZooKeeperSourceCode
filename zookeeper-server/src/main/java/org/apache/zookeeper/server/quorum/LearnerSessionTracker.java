@@ -37,6 +37,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * learner会话跟踪器由learner（followers和observers）用来跟踪zookeeper的会话，
+ * 该会话可能会也可能不会反馈给leader。
+ * 创建新会话后，它将被本地保存在已包装的LocalSessionTracker中。
+ * 随后可以根据需要将其升级到全局会话。
+ * 如果请求升级，则从本地集合中删除会话，同时保留相同的会话ID。caller可以将leader的会话创建请求排队。
+ *
+ * LearnerSessionTracker的第二个功能是记住此服务中已touched的会话。此信息通过ping传递给leader。
+ */
+
+/**
  * The learner session tracker is used by learners (followers and observers) to
  * track zookeeper sessions which may or may not be echoed to the leader.  When
  * a new session is created it is saved locally in a wrapped
@@ -154,7 +164,7 @@ public class LearnerSessionTracker extends UpgradeableSessionTracker {
     }
 
     public long createSession(int sessionTimeout) {
-        if (localSessionsEnabled) {
+        if (localSessionsEnabled) {  // 默认false
             return localSessionTracker.createSession(sessionTimeout);
         }
         return nextSessionId.getAndIncrement();

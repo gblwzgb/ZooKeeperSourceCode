@@ -97,7 +97,7 @@ public class DatadirCleanupManager {
             return;
         }
         // Don't schedule the purge task with zero or negative purge interval.
-        if (purgeInterval <= 0) {
+        if (purgeInterval <= 0) {  // 默认是0，不清除
             LOG.info("Purge task is not scheduled.");
             return;
         }

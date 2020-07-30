@@ -27,18 +27,24 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.zookeeper.common.Time;
 
+// NIOServerCnxnFactory.ConnectionExpirerThread和SessionTrackerImpl会使用这个队列，来清理过期session和连接
 /**
  * ExpiryQueue tracks elements in time sorted fixed duration buckets.
  * It's used by SessionTrackerImpl to expire sessions and NIOServerCnxnFactory
  * to expire connections.
+ * （译：ExpiryQueue跟踪按时间排序的固定持续时间段中的元素。
+ *      SessionTrackerImpl使用它来终止会话，而NIOServerCnxnFactory使用它来终止连接。）
  */
 public class ExpiryQueue<E> {
 
+    // <E，过期时间>
     private final ConcurrentHashMap<E, Long> elemMap = new ConcurrentHashMap<E, Long>();
     /**
      * The maximum number of buckets is equal to max timeout/expirationInterval,
      * so the expirationInterval should not be too small compared to the
      * max timeout that this expiry queue needs to maintain.
+     * （译：存储桶的最大数量等于max timeout/expirationInterval，
+     *      因此与该到期队列需要维护的最大超时相比，expirationInterval不应太小。）
      */
     private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>();
 

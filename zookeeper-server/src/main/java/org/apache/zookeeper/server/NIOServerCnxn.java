@@ -49,6 +49,19 @@ import org.apache.zookeeper.server.command.SetTraceMaskCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+ * 简介：ServerCnxn的默认实现
+ *
+ * 核心方法：
+ * 1、doIO：接收准备好的SelectionKey（来自NIOServerCnxnFactory的Select线程），做读、写处理
+ * 2、sendBuffer(ByteBuffer...)：提供异步发送数据给客户端的接口，先添加到outgoingBuffers，等到select检测到可写时，从outgoingBuffers取数据，发送给客户端。
+ * 3、sendResponse：发送response给客户端，内部会先调用ServerCnxn的序列化接口，然后调用sendBuffer等待被写
+ * 4、process：收到变更通知（WatchedEvent）了，发送给客户端一个NOTIFICATION_XID的通知响应
+ *
+ * 做的事情：
+ * 1、把socket中的数据，读到ByteBuffer中，然后把bb转给ZooKeeperServer处理。
+ */
+
 /**
  * This class handles communication with clients using NIO. There is one per
  * client, but only one thread doing the communication.
@@ -177,8 +190,10 @@ public class NIOServerCnxn extends ServerCnxn {
             incomingBuffer.flip();
             packetReceived(4 + incomingBuffer.remaining());
             if (!initialized) {
+                // 连接请求，这里的连接不是tcp的连接，是指创建会话session
                 readConnectRequest();
             } else {
+                // 读请求
                 readRequest();
             }
             lenBuffer.clear();
