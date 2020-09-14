@@ -135,6 +135,7 @@ public class Follower extends Learner {
                 // create a reusable packet to reduce gc impact  （译：创建可重用的数据包以减少gc的影响）
                 QuorumPacket qp = new QuorumPacket();
                 while (this.isRunning()) {
+                    // 读数据包
                     readPacket(qp);
                     // 处理数据包
                     processPacket(qp);
@@ -156,6 +157,7 @@ public class Follower extends Learner {
             if (connectionTime != 0) {
                 // 记录连接持续时间
                 long connectionDuration = System.currentTimeMillis() - connectionTime;
+                // 连接断开了，重新进入选举流程。
                 LOG.info(
                     "Disconnected from leader (with address: {}). Was connected for {}ms. Sync state: {}",
                     leaderAddr,

@@ -527,10 +527,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
      * Zab protocol that peer is running.
      */
     public enum ZabState {
-        ELECTION,
-        DISCOVERY,
-        SYNCHRONIZATION,
-        BROADCAST
+        ELECTION,  // 选举中
+        DISCOVERY,  // 选举完成，准备连接到 Leader
+        SYNCHRONIZATION,  // 连接成功，同步数据状态
+        BROADCAST  // 同步数据完成，等待 Leader 广播
     }
 
     /**

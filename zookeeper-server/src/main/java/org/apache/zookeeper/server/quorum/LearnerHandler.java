@@ -265,6 +265,7 @@ public class LearnerHandler extends ZooKeeperThread {
      * Keep track of whether we need to queue TRUNC or DIFF into packet queue
      * that we are going to blast it to the learner
      */
+    // 跟踪是否需要将 TRUNC 或 DIFF 排入数据包队列，然后将其发送给 learner
     private boolean needOpPacket = true;
 
     /**
@@ -516,7 +517,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 this.sid = learnerMaster.getAndDecrementFollowerCounter();
             }
 
-            // 获取Learner的信息，用于打印日志
+            // 获取 Learner 的信息，用于打印日志
             String followerInfo = learnerMaster.getPeerInfo(this.sid);
             if (followerInfo.isEmpty()) {
                 LOG.info(
@@ -528,7 +529,7 @@ public class LearnerHandler extends ZooKeeperThread {
             }
 
             if (qp.getType() == Leader.OBSERVERINFO) {
-                // Learner的类型，默认是LearnerType.PARTICIPANT
+                // Learner 的类型，默认是 LearnerType.PARTICIPANT
                 learnerType = LearnerType.OBSERVER;
             }
 
@@ -586,7 +587,7 @@ public class LearnerHandler extends ZooKeeperThread {
             // are counted as concurrent syncs though
             // （译：followers和leader之间的同步不受限制，因为保持仲裁服务器状态为最新很重要。 不过，豁免的同步算作并发同步）
             boolean exemptFromThrottle = getLearnerType() != LearnerType.OBSERVER;
-            /* if we are not truncating or sending a diff just send a snapshot */  // （译：如果我们不truncating或发送diff，则仅发送快照）
+            /* if we are not truncating or sending a diff just send a snapshot */  // （译：如果我们不 truncating 或发送 diff，则仅发送快照）
             if (needSnap) {
                 syncThrottler = learnerMaster.getLearnerSnapSyncThrottler();
                 syncThrottler.beginSync(exemptFromThrottle);
@@ -634,6 +635,7 @@ public class LearnerHandler extends ZooKeeperThread {
             bufferedOutput.flush();
 
             // Start thread that blast packets in the queue to learner  （译：启动线程，将队列中的数据包推给给learner）
+            /** 启动异步线程，用于异步发送数据包给 Learner */
             startSendingPackets();
 
             /*
@@ -735,7 +737,7 @@ public class LearnerHandler extends ZooKeeperThread {
                         si = new Request(null, sessionId, cxid, type, bb, qp.getAuthinfo());
                     }
                     si.setOwner(this);
-                    // 提交到Leader的RequestProcessor中，绕过LeaderRequestProcessor，直接进入PrepRequestProcessor
+                    // 提交到 Leader 的 RequestProcessor 中，绕过 LeaderRequestProcessor，直接进入 PrepRequestProcessor
                     learnerMaster.submitLearnerRequest(si);
                     // 收到的请求数+1
                     requestsReceived.incrementAndGet();
@@ -809,8 +811,8 @@ public class LearnerHandler extends ZooKeeperThread {
     /**
      * 确定我们是否需要使用DIFF/TRUNC/SNAP和设置follower来与follower同步，以从commit processor接收数据包
      *
-     * @param peerLastZxid
-     * @param learnerMaster
+     * @param peerLastZxid 对端 learner 的最大 zxid
+     * @param learnerMaster 从 learnerMaster 中同步数据，一般是 Leader
      * @return 如果需要快照传输，则为true。
      */
     /**
@@ -923,7 +925,7 @@ public class LearnerHandler extends ZooKeeperThread {
              *    txnlog + commitLog与关注者同步。 如果失败了，我们将发送快照
              */
 
-            if (forceSnapSync) {
+            if (forceSnapSync) {  // 默认 false
                 // Force learnerMaster to use snapshot to sync with follower
                 LOG.warn("Forcing snapshot sync - should not see this in production");
             } else if (lastProcessedZxid == peerLastZxid) {
@@ -942,7 +944,7 @@ public class LearnerHandler extends ZooKeeperThread {
                     "Sending TRUNC to follower zxidToSend=0x{} for peer sid:{}",
                     Long.toHexString(maxCommittedLog),
                     getSid());
-                // 发送一个TRUNC给Follower
+                // 发送一个 TRUNC 给Follower
                 queueOpPacket(Leader.TRUNC, maxCommittedLog);
                 currentZxid = maxCommittedLog;
                 needOpPacket = false;
@@ -1087,7 +1089,7 @@ public class LearnerHandler extends ZooKeeperThread {
                     needOpPacket = false;
                 } else if (packetZxid > peerLastZxid) {
                     // Peer have some proposals that the learnerMaster hasn't seen yet it may used to be a leader
-                    // （译：对方提出了一些提议，learnerMaster尚未见到，该peer它可能曾经是leader）
+                    // （译：对方提出了一些提议，learnerMaster 尚未见到，该 peer 它可能曾经是 leader）
                     if (ZxidUtils.getEpochFromZxid(packetZxid) != ZxidUtils.getEpochFromZxid(peerLastZxid)) {
                         // We cannot send TRUNC that cross epoch boundary.
                         // The learner will crash if it is asked to do so.

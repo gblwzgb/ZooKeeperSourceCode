@@ -533,7 +533,7 @@ public class Learner {
         // （译：在DIFF情况下，我们不需要创建快照，因为事务将在任何现有快照的顶部进行同步对于SNAP和TRUNC，需要使用快照来保存该历史记录）
         boolean snapshotNeeded = true;
         boolean syncSnapshot = false;
-        // 从Leader读一段数据到QuorumPacket中
+        // 从 Leader 读一段数据到 QuorumPacket 中
         readPacket(qp);
         // 已提交的数据包
         Deque<Long> packetsCommitted = new ArrayDeque<>();
@@ -548,7 +548,7 @@ public class Learner {
                 self.setSyncMode(QuorumPeer.SyncMode.SNAP);
                 LOG.info("Getting a snapshot from leader 0x{}", Long.toHexString(qp.getZxid()));
                 // The leader is going to dump the database db is clear as part of deserializeSnapshot()
-                // （译：leader将转储数据库db是deserializeSnapshot()的一部分）
+                // （译：leader 将转储数据库db是deserializeSnapshot()的一部分）
                 zk.getZKDatabase().deserializeSnapshot(leaderIs);
                 // ZOOKEEPER-2819: overwrite config node content extracted
                 // from leader snapshot with local config, to avoid potential
@@ -564,7 +564,7 @@ public class Learner {
                     LOG.error("Missing signature. Got {}", signature);
                     throw new IOException("Missing signature");
                 }
-                // 设置最后处理的zxid
+                // 设置最后处理的 zxid
                 zk.getZKDatabase().setlastProcessedZxid(qp.getZxid());
 
                 // immediately persist the latest snapshot when there is txn log gap
@@ -574,6 +574,7 @@ public class Learner {
                 //we need to truncate the log to the lastzxid of the leader
                 self.setSyncMode(QuorumPeer.SyncMode.TRUNC);
                 LOG.warn("Truncating log to get in sync with the leader 0x{}", Long.toHexString(qp.getZxid()));
+                // truncate 多余的事务日志
                 boolean truncated = zk.getZKDatabase().truncateLog(qp.getZxid());
                 if (!truncated) {
                     // not able to truncate the log
@@ -739,7 +740,7 @@ public class Learner {
         writePacket(ack, true);
         sock.setSoTimeout(self.tickTime * self.syncLimit);
         self.setSyncMode(QuorumPeer.SyncMode.NONE);
-        // 启动FollowerZooKeeperServer
+        // 启动 FollowerZooKeeperServer
         zk.startup();
         /*
          * Update the election vote here to ensure that all members of the
@@ -751,7 +752,7 @@ public class Learner {
         self.updateElectionVote(newEpoch);
 
         // We need to log the stuff that came in between the snapshot and the uptodate
-        // （译：我们需要记录快照和uptodate之间的内容）
+        // （译：我们需要记录快照和 uptodate 之间的内容）
         if (zk instanceof FollowerZooKeeperServer) {
             FollowerZooKeeperServer fzk = (FollowerZooKeeperServer) zk;
             for (PacketInFlight p : packetsNotCommitted) {
@@ -762,7 +763,7 @@ public class Learner {
             }
         } else if (zk instanceof ObserverZooKeeperServer) {
             // Similar to follower, we need to log requests between the snapshot and UPTODATE
-            // （译：与follower类似，我们需要log一下在快照和UPTODATE之间的请求）
+            // （译：与 follower 类似，我们需要 log 一下在快照和 UPTODATE 之间的请求）
             ObserverZooKeeperServer ozk = (ObserverZooKeeperServer) zk;
             for (PacketInFlight p : packetsNotCommitted) {
                 Long zxid = packetsCommitted.peekFirst();

@@ -1118,7 +1118,7 @@ public class FastLeaderElection implements Election {
                              * relevant message from the reception queue  (译：一旦我们没有从接收队列中读取任何新的相关消息，则该谓词（predicate）为真)
                              */
                             if (n == null) {
-                                // 更新本机的ServerState
+                                // 更新本机的ServerState，这样 QuorumPeer 就知道自己是 Leader 还是 Learner 了。
                                 setPeerState(proposedLeader, voteSet);
                                 // 最终投票
                                 Vote endVote = new Vote(proposedLeader, proposedZxid, logicalclock.get(), proposedEpoch);

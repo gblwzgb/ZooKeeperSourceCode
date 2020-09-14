@@ -103,7 +103,7 @@ import org.slf4j.LoggerFactory;
  * when consolidating peer communication. This is to be verified, though.
  *
  */
-
+// 管理 server 之间的连接，两台 server 之间如何保证只有一个连接？保留 serverId 大的发起那条连接，放弃 serverId 小的发起的连接，即保留的连接总是由大的 serverId 发起的。
 public class QuorumCnxManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(QuorumCnxManager.class);
@@ -165,13 +165,16 @@ public class QuorumCnxManager {
     /*
      * Mapping from Peer to Thread number
      */
+    // <对方的 sid，我方的发送线程>
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
+    // <对方的 sid，要发送给对方的消息>
     final ConcurrentHashMap<Long, BlockingQueue<ByteBuffer>> queueSendMap;
     final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
 
     /*
      * Reception queue
      */
+    // 用于存放接收到的消息
     public final BlockingQueue<Message> recvQueue;
 
     /*
@@ -594,6 +597,7 @@ public class QuorumCnxManager {
                 sid = protocolVersion;
             } else {
                 try {
+                    // 从流中解析出对方的选举地址
                     InitialMessage init = InitialMessage.parse(protocolVersion, din);
                     sid = init.sid;
                     electionAddr = new MultipleAddresses(init.electionAddr,
@@ -622,7 +626,7 @@ public class QuorumCnxManager {
         // do authenticating learner
         authServer.authenticate(sock, din);
         //If wins the challenge, then close the new connection.
-        if (sid < self.getId()) {
+        if (sid < self.getId()) {  // 如果本机的 serverId 比较大，说明赢了，则关闭对方发起的 socket 连接。
             /*
              * This replica might still believe that the connection to sid is
              * up, so we have to shut down the workers before trying to open a
@@ -669,7 +673,7 @@ public class QuorumCnxManager {
     /**
      * Processes invoke this message to queue a message to send. Currently,
      * only leader election uses it.
-     * 译：进程调用此消息以使要发送的消息排队。当前，只有领导人选举使用它。
+     * 译：进程调用此消息以使要发送的消息排队。当前，只有领导人选举时使用它。
      */
     public void toSend(Long sid, ByteBuffer b) {
         /*
@@ -730,7 +734,7 @@ public class QuorumCnxManager {
             }
             // 设置一些socket的选项（属性）
             setSockOpts(sock);
-            // 连接过去
+            // 从选举端口中，找到任意一个能联通的，连接过去
             sock.connect(electionAddr.getReachableOrOne(), cnxTO);
             if (sock instanceof SSLSocket) {
                 SSLSocket sslSock = (SSLSocket) sock;
@@ -947,7 +951,11 @@ public class QuorumCnxManager {
 
     /**
      * Thread to listen on some ports
+     * 在某些端口上监听的线程
      */
+    // 该线程的职责：
+    // 1、本机配置了几个选举端口，该线程就对应着创建几个 ListenerHandler 任务，将任务丢到线程池里，并阻塞到任务全部完成(停机才会完成)
+    // 2、ListenerHandler 任务负责绑定到选举端口上，并处理来自其他 server 的连接请求，并进行连接的 PK，通过 PK 来保证两台 server 之间只有一条 socket 连接。
     public class Listener extends ZooKeeperThread {
 
         private static final String ELECTION_PORT_BIND_RETRY = "zookeeper.electionPortBindRetry";
@@ -1205,6 +1213,8 @@ public class QuorumCnxManager {
      * soon as there is one available. If connection breaks, then opens a new
      * one.
      */
+    // 每个连接都对应一个 SendWorker，存的是对方的 sid，还有 socket 连接。
+    // 不断从队列中获取消息，然后发送给 peer 方。
     class SendWorker extends ZooKeeperThread {
 
         Long sid;
@@ -1339,7 +1349,8 @@ public class QuorumCnxManager {
                         if (bq != null) {
                             b = pollSendQueue(bq, 1000, TimeUnit.MILLISECONDS);
                         } else {
-                            // 没消息要发，退出循环
+                            // sid 没对应的消息队列，退出循环
+                            // 在 finish() 方法中，sid 会被从 queueSendMap 中移除，这里就会 break 了。
                             LOG.error("No queue of incoming messages for server {}", sid);
                             break;
                         }
@@ -1402,6 +1413,7 @@ public class QuorumCnxManager {
      * Thread to receive messages. Instance waits on a socket read. If the
      * channel breaks, then removes itself from the pool of receivers.
      */
+    // 不断从 socket 中读数据，封装成 Message 对象，然后丢到队列 recvQueue 中，等待FastLeaderElection.Messenger.WorkerReceiver处理
     class RecvWorker extends ZooKeeperThread {
 
         Long sid;
