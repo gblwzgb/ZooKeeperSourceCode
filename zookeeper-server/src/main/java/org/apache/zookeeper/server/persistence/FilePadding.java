@@ -81,6 +81,15 @@ public class FilePadding {
         return currentSize;
     }
 
+
+    /**
+     * 用填充计算新文件的大小。仅当当前文件位置与文件末尾足够接近（小于4K）并且preAllocSize> 0时，我们才返回新的大小。
+     *
+     * @param position     我们写入的文件中的点
+     * @param fileSize     应用程序跟踪当前文件大小
+     * @param preAllocSize 填充多少字节
+     * @return 新文件的大小。如果未进行填充，则可以与fileSize相同。
+     */
     /**
      * Calculates a new file size with padding. We only return a new size if
      * the current file position is sufficiently close (less than 4K) to end of

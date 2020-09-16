@@ -76,8 +76,7 @@ public class ZKDatabase {
     private static final Logger LOG = LoggerFactory.getLogger(ZKDatabase.class);
 
     /**
-     * make sure on a clear you take care of
-     * all these members.
+     * make sure on a clear you take care of all these members.
      */
     protected DataTree dataTree;
     protected ConcurrentHashMap<Long, Integer> sessionsWithTimeouts;
@@ -649,6 +648,7 @@ public class ZKDatabase {
      * @param si the request to append
      * @return true if the append was succesfull and false if not
      */
+    // 附加到底层的事务日志中
     public boolean append(Request si) throws IOException {
         txnCount.incrementAndGet();
         return this.snapLog.append(si);
@@ -666,6 +666,7 @@ public class ZKDatabase {
      * commit to the underlying transaction log
      * @throws IOException
      */
+    // flush 到磁盘中
     public void commit() throws IOException {
         this.snapLog.commit();
     }

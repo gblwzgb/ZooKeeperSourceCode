@@ -1777,7 +1777,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                 }
             }
 
-            // do not add non quorum packets to the queue.  （不要将非quorum数据包添加到队列中。）
+            // do not add non quorum packets to the queue.  （不要将非 quorum 数据包添加到队列中。）
             if (quorumRequest) {
                 // 加到已commit的提议队列中
                 getZKDatabase().addCommittedProposal(request);

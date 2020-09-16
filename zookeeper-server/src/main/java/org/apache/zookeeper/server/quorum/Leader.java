@@ -444,7 +444,9 @@ public class Leader extends LearnerMaster {
     // 未完成的提议，<zxid，提议>
     final ConcurrentMap<Long, Proposal> outstandingProposals = new ConcurrentHashMap<Long, Proposal>();
 
-    // 待commit的提议，这个应该是集群启动时同步数据用的
+    // Leader 用于暂存那些已经投票通过，但还未完成本地 commit 的提议。
+    // 1、CommitProcessor 完成 commit 请求后，会在 Leader.ToBeAppliedRequestProcessor 中将 Proposal 移除。
+    // 2、由于这些提议都是被投票通过的，所以在 Leader.startForwarding 中，可以直接取出来，发送给 Learner
     private final ConcurrentLinkedQueue<Proposal> toBeApplied = new ConcurrentLinkedQueue<Proposal>();
 
     // VisibleForTesting
@@ -1015,7 +1017,8 @@ public class Leader extends LearnerMaster {
             // 给所有observer发inform消息
             inform(p);
         }
-        // commit到CommitProcessor处理器的committedRequests队列中，等待异步处理
+        /** 本 Leader 也要 commit 的*/
+        // commit 到 CommitProcessor 处理器的 committedRequests 队列中，等待异步处理
         zk.commitProcessor.commit(p.request);
         if (pendingSyncs.containsKey(zxid)) {
             for (LearnerSyncRequest r : pendingSyncs.remove(zxid)) {
@@ -1137,7 +1140,7 @@ public class Leader extends LearnerMaster {
          * FinalRequestProcessor.processRequest MUST process the request
          * synchronously!
          *
-         * （译：该请求处理器仅维护toBeApplied列表。为此，接下来必须是FinalRequestProcessor，且FinalRequestProcessor.processRequest必须同步处理请求！）
+         * （译：该请求处理器仅维护 toBeApplied 列表。为此，接下来必须是FinalRequestProcessor，且FinalRequestProcessor.processRequest必须同步处理请求！）
          *
          * @param next
          *                a reference to the FinalRequestProcessor
@@ -1392,16 +1395,16 @@ public class Leader extends LearnerMaster {
      */
     @Override
     public synchronized long startForwarding(LearnerHandler handler, long lastSeenZxid) {
-        // Queue up any outstanding requests enabling the receipt of
-        // new requests
+        // Queue up any outstanding requests enabling the receipt of new requests
+        // （译：对所有未完成的请求进行排队，以接收新请求）
         if (lastProposed > lastSeenZxid) {
             for (Proposal p : toBeApplied) {
                 if (p.packet.getZxid() <= lastSeenZxid) {
                     continue;
                 }
                 handler.queuePacket(p.packet);
-                // Since the proposal has been committed we need to send the
-                // commit message also
+                // Since the proposal has been committed we need to send the commit message also
+                // 由于提案已经提交，我们还需要发送提交消息
                 QuorumPacket qp = new QuorumPacket(Leader.COMMIT, p.packet.getZxid(), null, null);
                 handler.queuePacket(qp);
             }
@@ -1667,7 +1670,7 @@ public class Leader extends LearnerMaster {
             if (newLeaderProposal.hasAllQuorums()) {
                 // 集群已经形成了
                 quorumFormed = true;
-                // 通知其他等待的LearnerHandler线程
+                // 通知其他等待的 LearnerHandler 线程
                 newLeaderProposal.qvAcksetPairs.notifyAll();
             } else {
                 // 阻塞等待一定时间

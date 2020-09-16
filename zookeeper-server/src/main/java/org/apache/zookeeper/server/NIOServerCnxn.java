@@ -190,7 +190,7 @@ public class NIOServerCnxn extends ServerCnxn {
             incomingBuffer.flip();
             packetReceived(4 + incomingBuffer.remaining());
             if (!initialized) {
-                // 连接请求，这里的连接不是tcp的连接，是指创建会话session
+                // 连接请求，这里的连接不是 tcp 的连接，是指创建会话 session
                 readConnectRequest();
             } else {
                 // 读请求

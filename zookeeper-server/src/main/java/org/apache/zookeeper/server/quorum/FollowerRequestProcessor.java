@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * （译：该RequestProcessor将任何修改系统状态的请求转发给Leader。）
  */
 // 使用队列，将同步转异步
-    // 问：客户端收到成功的回应？
+// 问：客户端收到成功的回应？
 public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements RequestProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(FollowerRequestProcessor.class);
@@ -46,6 +46,7 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
 
     RequestProcessor nextProcessor;
 
+    // 用于同步转异步
     LinkedBlockingQueue<Request> queuedRequests = new LinkedBlockingQueue<Request>();
 
     boolean finished = false;
@@ -66,7 +67,7 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                     ZooTrace.logRequest(LOG, ZooTrace.CLIENT_REQUEST_TRACE_MASK, 'F', request, "");
                 }
                 if (request == Request.requestOfDeath) {
-                    // 如果是dead的请求，就退出死循环
+                    // 如果是 dead 的请求，就退出死循环
                     break;
                 }
 
@@ -89,7 +90,7 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                 // add it to pendingSyncs.
                 switch (request.type) {
                 case OpCode.sync:
-                    // zkCli客户端发起的同步请求
+                    // zkCli 客户端发起的同步请求
                     zks.pendingSyncs.add(request);
                     zks.getFollower().request(request);
                     break;
@@ -104,7 +105,7 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                 case OpCode.setACL:
                 case OpCode.multi:
                 case OpCode.check:
-                    // 发一个Leader.REQUEST的数据包给Leader
+                    // 发一个 Leader.REQUEST 的数据包给 Leader
                     zks.getFollower().request(request);
                     break;
                 case OpCode.createSession:
@@ -150,6 +151,7 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                 }
             }
 
+            // 同步转异步
             queuedRequests.add(request);
         }
     }

@@ -103,6 +103,7 @@ import org.slf4j.LoggerFactory;
  *
  * 当前leader的请求将仅包含一个xid：int xid;
  */
+// 表示分布式算法的一端 (peer)
 
 /**
  * This class manages the quorum protocol. There are three states this server

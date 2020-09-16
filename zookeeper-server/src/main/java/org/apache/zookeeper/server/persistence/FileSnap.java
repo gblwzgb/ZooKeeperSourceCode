@@ -38,6 +38,8 @@ import org.slf4j.LoggerFactory;
 /**
  * 此类实现快照接口。它负责存储，序列化和反序列化正确的快照。并提供对快照的访问。
  */
+// 对 DataTree 进行快照。
+// 对该类的访问，基本来自工具类：FileTxnSnapLog
 
 /**
  * This class implements the snapshot interface.

@@ -85,10 +85,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 该请求处理器实际上应用与请求关联的任何事务并为任何查询提供服务。
+ * 该请求处理器 apply 与 request 关联的任何事务并为任何查询提供服务。
  * 它始终位于RequestProcessor链的末尾（因此具有名称），因此它没有nextProcessor成员。
  *
- * 这个RequestProcessor依靠ZooKeeperServer来填充ZooKeeperServer的outstandingRequests成员。
+ * 这个RequestProcessor 依靠 ZooKeeperServer 来填充 ZooKeeperServer 的 outstandingRequests 成员。
  */
 
 /**

@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.zookeeper.data.Id;
 import org.apache.zookeeper.server.Request;
 
+// 见 org.apache.zookeeper.ZooDefs.OpCode.sync
 public class LearnerSyncRequest extends Request {
 
     LearnerHandler fh;

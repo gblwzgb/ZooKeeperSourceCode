@@ -44,11 +44,11 @@ import org.slf4j.LoggerFactory;
 /*
  * 核心职责：
  * 1、配置一些信息
- * 2、创建启动一个AcceptThread，用于接收客户端的connect请求，并分发给SelectorThread
- * 3、创建启动一组SelectorThread，用来select后续的客户端读、写请求
- * 4、创建一个WorkerService线程池，SelectorThread收到请求后，封装成IOWorkRequest，丢入该线程池处理
- * 5、创建并启动ConnectionExpirerThread，用于清理过期的连接
- * 6、创建NIOServerCnxn（这个发生在SelectorThread中，SelectorThread拿到AcceptThread的分发的socket后，会封装成NIOServerCnxn）
+ * 2、创建启动一个 AcceptThread，用于接收客户端的 connect 请求，并分发给 SelectorThread
+ * 3、创建启动一组 SelectorThread，用来 select 后续的客户端读、写请求
+ * 4、创建一个 WorkerService 线程池，SelectorThread 收到请求后，封装成 IOWorkRequest，丢入该线程池处理
+ * 5、创建并启动 ConnectionExpirerThread，用于清理过期的连接
+ * 6、创建 NIOServerCnxn（这个发生在 SelectorThread 中，SelectorThread 拿到 AcceptThread 的分发的 socket 后，会封装成 NIOServerCnxn）
  *
  * 内部线程类：
  * 1、AcceptThread

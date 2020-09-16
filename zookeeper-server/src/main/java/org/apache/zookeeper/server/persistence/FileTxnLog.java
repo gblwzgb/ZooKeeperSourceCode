@@ -53,7 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 此类实现TxnLog接口。它提供api来访问txnlogs并向其中添加entries。
+ * 此类实现 TxnLog 接口。它提供api来访问txnlogs并向其中添加entries。
  * 事务日志的格式如下：
  *
  *    LogFile:
@@ -72,7 +72,7 @@ import org.slf4j.LoggerFactory;
  *        checksum Txnlen TxnHeader Record 0x42
  *
  *    checksum: 8bytes Adler32 is currently used
- *      calculated across payload -- Txnlen, TxnHeader, Record and 0x42
+ *      跨 payload 计算 -- Txnlen, TxnHeader, Record and 0x42
  *
  *    Txnlen:
  *        len 4bytes
@@ -86,11 +86,13 @@ import org.slf4j.LoggerFactory;
  *      }
  *
  *    Record:
- *        See Jute definition file for details on the various record types
+ *        有关各种记录类型的详细信息，请参见 Jute 定义文件
  *
  *    ZeroPad:
  *        0 padded to EOF (filled during preallocation stage)
  */
+// 可以理解成数据库的 binlog
+// 对该类的访问，基本来自工具类：FileTxnSnapLog
 
 /**
  * This class implements the TxnLog interface. It provides api's
@@ -134,6 +136,7 @@ import org.slf4j.LoggerFactory;
  *     0 padded to EOF (filled during preallocation stage)
  * </pre></blockquote>
  */
+// https://www.jianshu.com/p/ea55d4c4d1cd
 public class FileTxnLog implements TxnLog, Closeable {
 
     private static final Logger LOG;
@@ -211,7 +214,7 @@ public class FileTxnLog implements TxnLog, Closeable {
     /**
      * constructor for FileTxnLog. Take the directory
      * where the txnlogs are stored
-     * @param logDir the directory where the txnlogs are stored
+     * @param logDir the directory where the txnlogs are stored  事务 log 存放的目录
      */
     public FileTxnLog(File logDir) {
         this.logDir = logDir;
@@ -273,12 +276,13 @@ public class FileTxnLog implements TxnLog, Closeable {
      * rollover the current log file to a new one.
      * @throws IOException
      */
-    // todo：这个不是很懂，不是每个zxid一个文件吗？
+    // 滚动到下一个日志。类似 log4j
     public synchronized void rollLog() throws IOException {
         if (logStream != null) {
+            // 将久的流刷到磁盘中
             this.logStream.flush();
             prevLogsRunningTotal += getCurrentLogSize();
-            // 清空，这样下次append的时候，会创建新的流
+            // 清空，这样调用 append 方法的时候，会创建新的流
             this.logStream = null;
             oa = null;
 
@@ -344,7 +348,7 @@ public class FileTxnLog implements TxnLog, Closeable {
             // 放入待flush的队列中
             streamsToFlush.add(fos);
         }
-        // todo：不懂
+        // 预先填充 64M
         filePadding.padFile(fos.getChannel());
         // 事务头、事务、数字签名转字节数组
         byte[] buf = Util.marshallTxnEntry(hdr, txn, digest);
@@ -359,7 +363,7 @@ public class FileTxnLog implements TxnLog, Closeable {
         // 写事务，写结束符
         Util.writeTxnBytes(oa, buf);
 
-        /** 注意，这里只是写到流里，等待commit的时候再flush **/
+        /** 注意，这里只是写到流里，等待 commit 的时候再 flush **/
         return true;
     }
 
@@ -445,6 +449,7 @@ public class FileTxnLog implements TxnLog, Closeable {
      */
     public synchronized void commit() throws IOException {
         if (logStream != null) {
+            // 写入磁盘
             logStream.flush();
         }
         for (FileOutputStream log : streamsToFlush) {
@@ -454,6 +459,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                 long startSyncNS = System.nanoTime();
 
                 FileChannel channel = log.getChannel();
+                // 写入文件
                 channel.force(false);
 
                 syncElapsedMS = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startSyncNS);

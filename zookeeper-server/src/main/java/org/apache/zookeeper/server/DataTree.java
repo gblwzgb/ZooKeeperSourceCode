@@ -86,9 +86,11 @@ import org.slf4j.LoggerFactory;
 /**
  * 此类维护树数据结构。它没有任何网络或客户端连接代码，因此可以以独立方式进行测试。
  *
- * 该树维护两个并行的数据结构：从完整路径映射到DataNode的哈希表和DataNode的树。
+ * 该树维护两个并行的数据结构：从完整路径映射到 DataNode 的哈希表和 DataNode 的树。
  * 对路径的所有访问都是通过哈希表进行的。仅在序列化到磁盘时遍历该树。
  */
+// 看起来是都是内存操作，只在快照时会序列化到磁盘中？
+// 该类还负责通知 Watcher
 
 /**
  * This class maintains the tree data structure. It doesn't have any networking
@@ -158,7 +160,9 @@ public class DataTree {
 
     /**
      * This hashtable lists the paths of the ephemeral nodes of a session.
+     * （译：该哈希表列出了会话的临时节点的路径。）
      */
+    // 如果 session 断开了，则从这个 map 里捞出要删除的临时节点。
     private final Map<Long, HashSet<String>> ephemerals = new ConcurrentHashMap<Long, HashSet<String>>();
 
     /**
@@ -486,7 +490,7 @@ public class DataTree {
         if (parent == null) {
             throw new KeeperException.NoNodeException();
         }
-        synchronized (parent) {
+        synchronized (parent) {  // 锁住父节点
             // Add the ACL to ACL cache first, to avoid the ACL not being
             // created race condition during fuzzy snapshot sync.
             //
@@ -550,7 +554,7 @@ public class DataTree {
                 child.copyStat(outputStat);
             }
         }
-        // now check if its one of the zookeeper node child  （现在检查它是否是zookeeper节点子节点之一）
+        // now check if its one of the zookeeper node child  （现在检查它是否是 zookeeper 节点子节点之一）
         if (parentName.startsWith(quotaZookeeper)) {
             // now check if its the limit node
             if (Quotas.limitNode.equals(childName)) {

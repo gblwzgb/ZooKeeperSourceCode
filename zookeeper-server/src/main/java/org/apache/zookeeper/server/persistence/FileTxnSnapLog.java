@@ -48,8 +48,9 @@ import org.slf4j.LoggerFactory;
  * above the implementations
  * of txnlog and snapshot
  * classes
- * （译：这是txnlog和快照类的实现之上的帮助器类）
+ * （译：这是 txnlog 和快照类的实现之上的帮助器类）
  */
+// 工具类，封装了对 FileSnap 和 FileTxnLog 类的访问。
 public class FileTxnSnapLog {
 
     //the directory containing the transaction logs  （译：包含事务日志的目录）
@@ -472,6 +473,7 @@ public class FileTxnSnapLog {
      * @param syncSnap sync the snapshot immediately after write
      * @throws IOException
      */
+    // 保存 datatree 和 session 到快照中。
     public void save(
         DataTree dataTree,
         ConcurrentHashMap<Long, Integer> sessionsWithTimeouts,
