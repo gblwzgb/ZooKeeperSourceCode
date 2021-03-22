@@ -91,9 +91,10 @@ public class Follower extends Learner {
             // 获取Leader的QuorumServer
             QuorumServer leaderServer = findLeader();
             try {
-                // 连接到Leader
+                /** 同步连接到 Leader */
                 connectToLeader(leaderServer.addr, leaderServer.hostname);
                 connectionTime = System.currentTimeMillis();
+                /** 和 leader 交换 epoch */
                 long newEpochZxid = registerWithLeader(Leader.FOLLOWERINFO);
                 if (self.isReconfigStateChange()) {
                     throw new Exception("learned about role change");

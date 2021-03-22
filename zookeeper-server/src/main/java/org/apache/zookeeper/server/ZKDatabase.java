@@ -343,6 +343,7 @@ public class ZKDatabase {
         }
     }
 
+    // 默认是true
     public boolean isTxnLogSyncEnabled() {
         boolean enabled = snapshotSizeFactor >= 0;
         if (enabled) {

@@ -117,6 +117,7 @@ public class Leader extends LearnerMaster {
 
     final QuorumPeer self;
 
+    // 这个为啥不是volatile的
     // VisibleForTesting
     protected boolean quorumFormed = false;
 
@@ -625,7 +626,7 @@ public class Leader extends LearnerMaster {
             // Start thread that waits for connection requests from new followers.
             // （译：等待来自新followers的连接请求的启动线程。）
             cnxAcceptor = new LearnerCnxAcceptor();
-            // 启动线程
+            // 启动 acceptor 线程
             cnxAcceptor.start();
 
             // todo：
@@ -822,6 +823,7 @@ public class Leader extends LearnerMaster {
                     tickSkip = !tickSkip;
                 }
                 for (LearnerHandler f : getLearners()) {
+                    /** 发送心跳给 follower */
                     f.ping();
                 }
             }
@@ -1502,6 +1504,7 @@ public class Leader extends LearnerMaster {
                 return epoch;
             }
             if (lastAcceptedEpoch >= epoch) {
+                // 这个不会发生吧？
                 epoch = lastAcceptedEpoch + 1;
             }
             if (isParticipant(sid)) {

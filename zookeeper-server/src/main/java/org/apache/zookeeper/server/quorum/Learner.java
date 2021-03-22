@@ -548,7 +548,7 @@ public class Learner {
                 self.setSyncMode(QuorumPeer.SyncMode.SNAP);
                 LOG.info("Getting a snapshot from leader 0x{}", Long.toHexString(qp.getZxid()));
                 // The leader is going to dump the database db is clear as part of deserializeSnapshot()
-                // （译：leader 将转储数据库db是deserializeSnapshot()的一部分）
+                // （译：leader 将 dump 数据库db，是deserializeSnapshot()的一部分）
                 zk.getZKDatabase().deserializeSnapshot(leaderIs);
                 // ZOOKEEPER-2819: overwrite config node content extracted
                 // from leader snapshot with local config, to avoid potential
@@ -602,6 +602,7 @@ public class Learner {
             TxnLogEntry logEntry;
             // we are now going to start getting transactions to apply followed by an UPTODATE
             // （译：我们现在要开始申请事务，然后加上UPTODATE，翻的有问题）
+            // 一直同步，直到收到 UPTODATE 消息后
             outerLoop:
             while (self.isRunning()) {
                 readPacket(qp);
@@ -710,6 +711,7 @@ public class Learner {
                     }
                     self.setZooKeeperServer(zk);
                     self.adminServer.setZooKeeperServer(zk);
+                    /** 只有这里的 break 会终止 while 循环 */
                     break outerLoop;
                 case Leader.NEWLEADER: // Getting NEWLEADER here instead of in discovery
                     // means this is Zab 1.0

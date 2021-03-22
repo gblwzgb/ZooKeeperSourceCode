@@ -699,7 +699,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
         registerMetrics();
 
-        // 设置zkServer的状态为RUNNING，到这里为止，阻塞的客户端请求就可以继续了。
+        // 设置zkServer的状态为RUNNING，到这里为止，阻塞的客户端请求就可以继续了。搜该类 wait 的地方。
         setState(State.RUNNING);
 
         requestPathMetricsCollector.start();

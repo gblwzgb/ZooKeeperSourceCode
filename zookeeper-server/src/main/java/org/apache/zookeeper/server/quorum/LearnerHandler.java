@@ -580,6 +580,7 @@ public class LearnerHandler extends ZooKeeperThread {
 
             // Take any necessary action if we need to send TRUNC or DIFF
             // startForwarding() will be called in all cases  （译：如果需要发送TRUNC或DIFF，请采取任何必要的措施startForwarding()在所有情况下都会被调用）
+            /** 同步数据给 Follower */
             boolean needSnap = syncFollower(peerLastZxid, learnerMaster);
 
             // syncs between followers and the leader are exempt from throttling because it
@@ -589,6 +590,7 @@ public class LearnerHandler extends ZooKeeperThread {
             boolean exemptFromThrottle = getLearnerType() != LearnerType.OBSERVER;
             /* if we are not truncating or sending a diff just send a snapshot */  // （译：如果我们不 truncating 或发送 diff，则仅发送快照）
             if (needSnap) {
+                /** 兜底：直接发送整个内存中的快照数据，什么时候触发？看 syncFollower 方法，默认应该不会触发的 */
                 syncThrottler = learnerMaster.getLearnerSnapSyncThrottler();
                 syncThrottler.beginSync(exemptFromThrottle);
                 try {
@@ -623,6 +625,7 @@ public class LearnerHandler extends ZooKeeperThread {
             // the version of this quorumVerifier will be set by leader.lead() in case
             // the leader is just being established. waitForEpochAck makes sure that readyToStart is true if
             // we got here, so the version was set
+            /** 发送 NEWLEADER 数据包  **/
             if (getVersion() < 0x10000) {
                 QuorumPacket newLeaderQP = new QuorumPacket(Leader.NEWLEADER, newLeaderZxid, null, null);
                 oa.writeRecord(newLeaderQP, "packet");
@@ -656,7 +659,7 @@ public class LearnerHandler extends ZooKeeperThread {
 
             LOG.debug("Received NEWLEADER-ACK message from {}", sid);
 
-            // 阻塞，直到NEWLEADER的ack超过一半
+            /** 阻塞，直到NEWLEADER的ack超过一半 */
             learnerMaster.waitForNewLeaderAck(getSid(), qp.getZxid());
 
             syncLimitCheck.start();
@@ -679,6 +682,7 @@ public class LearnerHandler extends ZooKeeperThread {
             LOG.debug("Sending UPTODATE message to {}", sid);
             queuedPackets.add(new QuorumPacket(Leader.UPTODATE, -1, null, null));
 
+            /** 死循环，一直处理 follower 的请求 **/
             while (true) {
                 qp = new QuorumPacket();
                 ia.readRecord(qp, "packet");
@@ -842,12 +846,13 @@ public class LearnerHandler extends ZooKeeperThread {
          * 如果同一个learner返回使用此zxid与learningerMaster进行同步，则我们将永远不会在此历史记录中找到该zxid。
          * 在这种情况下，如果我们有足够的历史记录，我们将忽略TRUNC逻辑并始终发送DIFF
          */
-        // 低32位为0
+        // 低32位为0，todo：该字段的作用？
         boolean isPeerNewEpochZxid = (peerLastZxid & 0xffffffffL) == 0;
         // Keep track of the latest zxid which already queued  （译：跟踪已经排队的最新zxid）
         long currentZxid = peerLastZxid;
         boolean needSnap = true;
         ZKDatabase db = learnerMaster.getZKDatabase();
+        // 默认是true
         boolean txnLogSyncEnabled = db.isTxnLogSyncEnabled();
         // 获取读写锁
         ReentrantReadWriteLock lock = db.getLogLock();
@@ -920,9 +925,9 @@ public class LearnerHandler extends ZooKeeperThread {
              *     我们无法发送TRUNC，因为follower没有txnlog
              * 4.Follower在commitLog范围内或已处于同步状态。
              *     我们可能需要发送DIFF或TRUNC，具体取决于关注者的zxid
-             *     如果Follower已经同步，我们总是发送空的DIFF
-             * 5.追随者错过了commitLog。 我们将尝试在磁盘上使用
-             *    txnlog + commitLog与关注者同步。 如果失败了，我们将发送快照
+             *     如果 Follower 已经同步，我们总是发送空的DIFF
+             * 5. Follower 错过了 commitLog。 我们将尝试使用磁盘上的
+             *    txnlog + commitLog 与 follower 同步。 如果失败了，我们将发送快照
              */
 
             if (forceSnapSync) {  // 默认 false
@@ -949,14 +954,14 @@ public class LearnerHandler extends ZooKeeperThread {
                 currentZxid = maxCommittedLog;
                 needOpPacket = false;
                 needSnap = false;
-            } else if ((maxCommittedLog >= peerLastZxid) && (minCommittedLog <= peerLastZxid)) {
+            } else if ((maxCommittedLog >= peerLastZxid) && (minCommittedLog <= peerLastZxid)) {  /** 直接使用 commitlog 还原出提案，发给 follower */
                 // Follower is within commitLog range  （Follower在commitLog范围内）
                 LOG.info("Using committedLog for peer sid: {}", getSid());
                 Iterator<Proposal> itr = db.getCommittedLog().iterator();
                 // todo：
                 currentZxid = queueCommittedProposals(itr, peerLastZxid, null, maxCommittedLog);
                 needSnap = false;
-            } else if (peerLastZxid < minCommittedLog && txnLogSyncEnabled) {
+            } else if (peerLastZxid < minCommittedLog && txnLogSyncEnabled) {  /** 读取磁盘还原出提案，发给 follower */
                 // Use txnlog and committedLog to sync  （译：使用txnlog和commitLog进行同步）
 
                 // Calculate sizeLimit that we allow to retrieve txnlog from disk  （译：计算sizeLimit，我们允许从磁盘检索txnlog）
